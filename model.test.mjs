@@ -363,6 +363,8 @@ assert.match(barWidget, /dimmed:\s*!root\.hasData/);
 assert.match(barWidget, /setting\("display",\s*"temp"\)/);
 assert.match(barWidget, /root\.conditionGlyph/);
 assert.match(barWidget, /root\.temperatureText/);
+assert.match(barWidget, /visible:\s*root\.displayMode !== "wind"/);
+assert.match(barWidget, /displayMode === "both"/);
 assert.doesNotMatch(barWidget, /\bIpcHandler\s*\{/);
 
 const panel = fs.readFileSync(new URL('./Panel.qml', import.meta.url), 'utf8');

@@ -55,7 +55,7 @@ Set values with `omarchy bar set io.github.minholi.windy <key> <value>` or throu
 | `apiKey` | string | `""` | Windy Point Forecast key. Blank falls back to `WINDY_API_KEY`. |
 | `unit` | `kn`, `kmh`, `mph`, `ms` | `kn` | Wind speed unit. |
 | `temperatureUnit` | `auto`, `c`, `f` | `auto` | Auto resolves by the location's country, then the locale. Rain follows: mm with °C, inches with °F. |
-| `display` | `temp`, `wind`, `both` | `temp` | What the bar pill shows. |
+| `display` | `temp`, `wind`, `both` | `temp` | Bar pill: condition + temperature, rotating arrow + speed, or all four. |
 | `level` | `surface`, `850h`, `700h`, `500h`, `300h` | `surface` | Wind level; temperature and rain stay at the surface. |
 | `model` | `auto`, `gfs`, `icon`, `iconEu`, `iconD2`, `aromeFrance`, `hrrrConus`, `namConus`, `namAlaska`, `namHawaii`, `canHrdps` | `auto` | Auto picks the highest-resolution model covering your coordinates, falling back to GFS. |
 | `refreshMinutes` | integer 5–180 | `15` | Forecast refresh interval. |

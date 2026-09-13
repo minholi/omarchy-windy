@@ -91,10 +91,12 @@ BarWidget {
       anchors.centerIn: parent
       spacing: Style.space(3)
 
+      // Condition icon leads in temp/both so the temperature block keeps the
+      // same position whether or not the wind group is shown.
       Text {
         id: conditionText
         anchors.verticalCenter: parent.verticalCenter
-        visible: root.displayMode === "temp"
+        visible: root.displayMode !== "wind"
         textFormat: Text.PlainText
         text: root.hasData && root.conditionGlyph !== "" ? root.conditionGlyph : "\uf72e"
         color: button.active && button.useActiveColor ? button.activeColor : button.foreground
@@ -104,9 +106,28 @@ BarWidget {
       }
 
       Text {
+        id: temperatureTextItem
+        anchors.verticalCenter: parent.verticalCenter
+        visible: root.hasData && !root.vertical && root.displayMode !== "wind"
+        textFormat: Text.PlainText
+        text: root.temperatureText
+        color: button.foreground
+        font.family: button.fontFamily
+        font.pixelSize: Style.font.body
+        renderType: Text.NativeRendering
+      }
+
+      Item {
+        width: Style.space(5)
+        height: 1
+        visible: root.displayMode === "both" && !root.vertical
+      }
+
+      Text {
         id: arrowText
         anchors.verticalCenter: parent.verticalCenter
-        visible: root.displayMode !== "temp"
+        // Vertical bars show a single glyph, so "both" keeps the condition.
+        visible: root.displayMode !== "temp" && !(root.vertical && root.displayMode === "both")
         textFormat: Text.PlainText
         text: root.hasData ? "\uf062" : "\uf72e"  // nf-fa-arrow_up / nf-fa-wind
         rotation: root.hasData && root.current ? root.current.toward : 0
@@ -122,18 +143,6 @@ BarWidget {
         visible: root.hasData && !root.vertical && root.displayMode !== "temp"
         textFormat: Text.PlainText
         text: root.speedLabel
-        color: button.foreground
-        font.family: button.fontFamily
-        font.pixelSize: Style.font.body
-        renderType: Text.NativeRendering
-      }
-
-      Text {
-        id: temperatureTextItem
-        anchors.verticalCenter: parent.verticalCenter
-        visible: root.hasData && !root.vertical && root.displayMode !== "wind"
-        textFormat: Text.PlainText
-        text: root.temperatureText
         color: button.foreground
         font.family: button.fontFamily
         font.pixelSize: Style.font.body

@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "io.github.minholi.windy",
   "name": "Windy",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "author": "Marcelo Minholi",
   "license": "MIT",
   "description": "Condition, temperature, rain, and wind forecast in the bar, backed by the Windy Point Forecast API",
@@ -89,7 +89,7 @@
         "key": "display",
         "type": "enum",
         "label": "Bar display",
-        "description": "What the bar pill shows. Temp is the condition icon plus temperature (default); wind is the rotating arrow plus speed; both shows all three.",
+        "description": "What the bar pill shows. Temp is the condition icon plus temperature (default); wind is the rotating arrow plus speed; both shows the condition icon, temperature, wind arrow, and speed.",
         "options": [
           "temp",
           "wind",
