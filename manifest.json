@@ -1,0 +1,125 @@
+{
+  "schemaVersion": 1,
+  "id": "io.github.minholi.windy",
+  "name": "Windy",
+  "version": "1.0.0",
+  "author": "Marcelo Minholi",
+  "license": "MIT",
+  "description": "Condition, temperature, rain, and wind forecast in the bar, backed by the Windy Point Forecast API",
+  "kinds": [
+    "bar-widget"
+  ],
+  "activation": "on-demand",
+  "entryPoints": {
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "Windy",
+    "description": "Wind speed, gusts, and direction from the Windy Point Forecast API, with an hourly outlook and a jump into windy.com.",
+    "category": "Info",
+    "aliases": [
+      "wind",
+      "windy",
+      "forecast"
+    ],
+    "allowMultiple": false,
+    "defaultSection": "center",
+    "defaults": {
+      "apiKey": "",
+      "model": "auto",
+      "unit": "kn",
+      "temperatureUnit": "auto",
+      "level": "surface",
+      "display": "temp",
+      "refreshMinutes": 15
+    },
+    "schema": [
+      {
+        "key": "apiKey",
+        "type": "string",
+        "label": "Windy API key",
+        "description": "Point Forecast key from https://account.windy.com/keys. Leave blank to read the WINDY_API_KEY environment variable.",
+        "defaultValue": ""
+      },
+      {
+        "key": "model",
+        "type": "enum",
+        "label": "Forecast model",
+        "description": "Auto picks the highest-resolution model covering your coordinates and falls back to the global GFS.",
+        "options": [
+          "auto",
+          "gfs",
+          "icon",
+          "iconEu",
+          "iconD2",
+          "aromeFrance",
+          "hrrrConus",
+          "namConus",
+          "namAlaska",
+          "namHawaii",
+          "canHrdps"
+        ],
+        "defaultValue": "auto"
+      },
+      {
+        "key": "unit",
+        "type": "enum",
+        "label": "Speed unit",
+        "options": [
+          "kn",
+          "kmh",
+          "mph",
+          "ms"
+        ],
+        "defaultValue": "kn"
+      },
+      {
+        "key": "temperatureUnit",
+        "type": "enum",
+        "label": "Temperature unit",
+        "description": "Auto follows the locale: Fahrenheit for US/Liberia/Myanmar, Celsius elsewhere. Rain switches to inches with Fahrenheit.",
+        "options": [
+          "auto",
+          "c",
+          "f"
+        ],
+        "defaultValue": "auto"
+      },
+      {
+        "key": "display",
+        "type": "enum",
+        "label": "Bar display",
+        "description": "What the bar pill shows. Temp is the condition icon plus temperature (default); wind is the rotating arrow plus speed; both shows all three.",
+        "options": [
+          "temp",
+          "wind",
+          "both"
+        ],
+        "defaultValue": "temp"
+      },
+      {
+        "key": "level",
+        "type": "enum",
+        "label": "Wind level",
+        "description": "Pressure level for the wind series. Surface is the 10 m wind; levels below are useful for paragliding and aviation.",
+        "options": [
+          "surface",
+          "850h",
+          "700h",
+          "500h",
+          "300h"
+        ],
+        "defaultValue": "surface"
+      },
+      {
+        "key": "refreshMinutes",
+        "type": "integer",
+        "label": "Refresh interval (minutes)",
+        "min": 5,
+        "max": 180,
+        "step": 5,
+        "defaultValue": 15
+      }
+    ]
+  }
+}
