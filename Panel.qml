@@ -120,7 +120,9 @@ Panel {
 
   Process {
     id: ipLocationProc
-    command: ["curl", "-fsS", "--max-time", "8", "https://ipwho.is/"]
+    command: Model.ipLocationCommand()
+    clearEnvironment: true
+    environment: ({})
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: {
@@ -161,11 +163,6 @@ Panel {
   }
 
   // ---- Location editing -----------------------------------------------------
-  function geocodeUrl(query, count) {
-    return "https://geocoding-api.open-meteo.com/v1/search?name=" + encodeURIComponent(query)
-      + "&count=" + count + "&language=en&format=json"
-  }
-
   function startEditingLocation() {
     editingLocation = true
     savingLocation = false
@@ -264,14 +261,14 @@ Panel {
 
   function startGeocode() {
     geocodeActiveQuery = geocodePendingQuery
-    geocodeProc.command = ["curl", "-fsS", "--max-time", "5", geocodeUrl(geocodeActiveQuery, 5)]
+    geocodeProc.command = Model.geocodeCommand(geocodeActiveQuery, 5, 5)
     geocodeProc.running = true
   }
 
   function resolveLocationName(name) {
     if (resolveProc.running) return
     pendingLocationName = name
-    resolveProc.command = ["curl", "-fsS", "--max-time", "6", geocodeUrl(name, 1)]
+    resolveProc.command = Model.geocodeCommand(name, 1)
     resolveProc.running = true
   }
 
@@ -279,12 +276,14 @@ Panel {
   // fall back to the locale for the temperature unit. Resolve it once.
   function requestCountry(name) {
     if (countryProc.running || root.countryHint !== "" || !name) return
-    countryProc.command = ["curl", "-fsS", "--max-time", "6", geocodeUrl(name, 1)]
+    countryProc.command = Model.geocodeCommand(name, 1)
     countryProc.running = true
   }
 
   Process {
     id: geocodeProc
+    clearEnvironment: true
+    environment: ({})
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: {
@@ -303,6 +302,8 @@ Panel {
 
   Process {
     id: countryProc
+    clearEnvironment: true
+    environment: ({})
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: {
@@ -314,6 +315,8 @@ Panel {
 
   Process {
     id: resolveProc
+    clearEnvironment: true
+    environment: ({})
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: {
@@ -361,6 +364,11 @@ Panel {
   property string errorText: ""
   property int retries: 0
   property double lastUpdatedMs: 0
+
+  // The JSON body (which carries the API key) is piped into curl's stdin, never
+  // passed as an argument. It is cleared once written, which closes stdin.
+  property string requestBody: ""
+  property bool forecastStarted: false
 
   readonly property string modelId: Model.resolveModel(modelSetting,
     location ? location.latitude : NaN, location ? location.longitude : NaN)
@@ -440,11 +448,15 @@ Panel {
 
     loading = true
     retries = 0
-    forecastProc.command = ["curl", "-sS", "--fail-with-body", "--max-time", "10",
-      "-X", "POST",
-      "-H", "Content-Type: application/json",
-      "--data-binary", JSON.stringify(payload),
-      Model.API_URL]
+    requestBody = Model.forecastRequestBody(payload)
+    startForecastRequest()
+  }
+
+  // One request, one body: `onStarted` writes requestBody to curl's stdin and
+  // clears it, so a retry can start the same request again.
+  function startForecastRequest() {
+    if (requestBody === "" || forecastProc.running) return
+    forecastProc.command = Model.forecastRequestCommand()
     forecastProc.running = true
   }
 
@@ -460,12 +472,34 @@ Panel {
     onTriggered: {
       if (forecastProc.running) return
       root.loading = true
-      forecastProc.running = true
+      root.startForecastRequest()
     }
   }
 
   Process {
     id: forecastProc
+    // No command argument ever holds the API key, and the child runs with a
+    // closed environment so no inherited variable reaches curl.
+    stdinEnabled: root.requestBody !== ""
+    clearEnvironment: true
+    environment: ({})
+    onStarted: {
+      root.forecastStarted = true
+      if (root.requestBody === "") return
+      write(root.requestBody)
+      // Clearing the body flips stdinEnabled, which closes the pipe so curl
+      // sees EOF and sends the request.
+      root.requestBody = ""
+    }
+    onRunningChanged: {
+      if (running) return
+      var started = root.forecastStarted
+      root.forecastStarted = false
+      // A missing /usr/bin/curl fails to start and never emits onExited.
+      if (started || !root.loading) return
+      root.loading = false
+      root.errorText = "curl is missing at " + Model.CURL_PATH
+    }
     stdout: StdioCollector {
       id: forecastStdout
       waitForEnd: true

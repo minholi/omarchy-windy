@@ -15,7 +15,7 @@ A wind, rain, and temperature bar widget for [Omarchy](https://omarchy.org) Quat
 
 - Omarchy with the Omarchy shell (Quattro).
 - A free Windy **Point Forecast** API key: <https://account.windy.com/keys>.
-- `curl` (preinstalled on Omarchy).
+- `curl` at `/usr/bin/curl` (preinstalled on Omarchy).
 
 The widget uses these network services at runtime:
 
@@ -25,6 +25,23 @@ The widget uses these network services at runtime:
 | `geocoding-api.open-meteo.com` | Location search suggestions |
 | `ipwho.is` | First-run location auto-detection when no location is configured |
 | `www.windy.com` | Opened in your browser by the panel's "Open windy.com" button |
+
+## Request handling
+
+Every request runs `/usr/bin/curl` by absolute path with a closed environment, so
+nothing from the shell environment (including `WINDY_API_KEY`) reaches it and no
+`PATH` entry can substitute another binary.
+
+The Windy API expects the key inside the JSON request body. That body is piped to
+curl's stdin (`--data-binary @-`) instead of being passed as an argument, so the
+key never appears in a process command line, where `/proc/<pid>/cmdline` and
+failed-start diagnostics would expose it.
+
+Responses are bounded by curl itself (256 KiB for forecasts, 64 KiB for the
+location and geocoding lookups) and by a request timeout, so a hostile or
+malformed response cannot grow the shell's in-memory buffer without limit.
+Because the environment is closed, proxy variables such as `https_proxy` do not
+apply to these requests.
 
 ## Install
 

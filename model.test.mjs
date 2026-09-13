@@ -196,6 +196,56 @@ assert.equal(custom.model, 'iconEu');
 assert.deepEqual([...custom.levels], ['surface', '850h']);
 assert.deepEqual([...custom.parameters], ['wind']);
 
+// ---- Request hardening -----------------------------------------------------
+// The API key travels in the request body written to curl's stdin. It must
+// never appear in a process argument: argv is readable from /proc while the
+// request runs and the shell logs the command when a process fails to start.
+const secretPayload = model.requestPayload({latitude: 49.809, longitude: 16.787, key: 'WINDY-KEY-SECRET'});
+const forecastCommand = [...model.forecastRequestCommand()];
+const forecastBody = model.forecastRequestBody(secretPayload);
+
+assert.equal(model.CURL_PATH, '/usr/bin/curl');
+assert.equal(forecastCommand[0], model.CURL_PATH);
+assert.ok(forecastCommand.every(argument => typeof argument === 'string'));
+assert.ok(!forecastCommand.join('\u0000').includes('WINDY-KEY-SECRET'), 'API key must not reach argv');
+assert.ok(!forecastCommand.some(argument => argument.includes('lat') || argument.includes('key')),
+  'no request data in argv');
+assert.equal(forecastCommand[forecastCommand.indexOf('--data-binary') + 1], '@-');
+assert.equal(forecastCommand[forecastCommand.indexOf('--max-time') + 1], '10');
+assert.equal(forecastCommand[forecastCommand.indexOf('--max-filesize') + 1],
+  String(model.MAX_FORECAST_BYTES));
+assert.ok(forecastCommand.includes('--fail-with-body'));
+assert.equal(forecastCommand[forecastCommand.length - 1], model.API_URL);
+assert.equal(forecastCommand.filter(argument => argument === '--data-binary').length, 1);
+
+assert.equal(forecastBody, JSON.stringify(secretPayload));
+assert.equal(JSON.parse(forecastBody).key, 'WINDY-KEY-SECRET');
+assert.equal(model.forecastRequestBody(null), '');
+assert.equal(model.forecastRequestBody('nope'), '');
+
+const metadataCommands = [
+  model.ipLocationCommand(),
+  model.geocodeCommand('Malibu', 1),
+  model.geocodeCommand('Malibu', 1, 5)
+];
+for (const command of metadataCommands) {
+  assert.equal(command[0], model.CURL_PATH, 'metadata requests use the fixed executable');
+  assert.ok(command.includes('--fail'));
+  assert.ok(!command.includes('--fail-with-body'));
+  assert.ok(!command.includes('@-'), 'metadata requests carry no stdin body');
+  assert.equal(command[command.indexOf('--max-filesize') + 1], String(model.MAX_METADATA_BYTES));
+  assert.match(command[command.length - 1], /^https:\/\//);
+}
+assert.ok(model.MAX_FORECAST_BYTES > 0 && Number.isInteger(model.MAX_FORECAST_BYTES));
+assert.ok(model.MAX_METADATA_BYTES > 0 && model.MAX_METADATA_BYTES < model.MAX_FORECAST_BYTES);
+assert.equal(model.ipLocationCommand()[model.ipLocationCommand().length - 1], model.IP_LOCATION_URL);
+assert.equal(model.geocodeUrl('São Paulo', 5),
+  'https://geocoding-api.open-meteo.com/v1/search?name=S%C3%A3o%20Paulo&count=5&language=en&format=json');
+assert.equal(model.geocodeCommand('São Paulo', 5, 5)[model.geocodeCommand('São Paulo', 5, 5).length - 1],
+  model.geocodeUrl('São Paulo', 5));
+assert.equal(model.geocodeCommand('Malibu', 1)[model.geocodeCommand('Malibu', 1).indexOf('--max-time') + 1], '6');
+assert.ok(model.curlArguments({timeoutSeconds: 3, maxBytes: 10}).includes('--fail'));
+
 // ---- Weather parameters and levels -----------------------------------------
 assert.ok(!model.requestParameters('gfs').includes('weatherWarnings'));
 assert.ok(model.requestParameters('iconEu').includes('weatherWarnings'));
@@ -389,7 +439,17 @@ assert.match(panel, /Model\.locationCommit\(/);
 for (const method of ['startEditingLocation', 'commitLocation', 'clearLocation', 'pickSuggestion', 'resolveLocationName'])
   assert.match(panel, new RegExp(`function\\s+${method}\\s*\\(`));
 assert.match(panel, /omarchy-weather-location/);
-assert.match(panel, /geocoding-api\.open-meteo\.com/);
+assert.match(panel, /Model\.geocodeCommand\(/);
+assert.match(panel, /Model\.ipLocationCommand\(/);
+// The forecast body is piped into curl's stdin and never becomes an argument.
+assert.match(panel, /Model\.forecastRequestCommand\(/);
+assert.match(panel, /Model\.forecastRequestBody\(/);
+assert.match(panel, /stdinEnabled:\s*root\.requestBody !== ""/);
+assert.match(panel, /write\(root\.requestBody\)/);
+assert.match(panel, /clearEnvironment:\s*true/);
+assert.match(panel, /environment:\s*\(\{\}\)/);
+assert.ok(!panel.includes('["curl"'), 'Panel must not run curl from PATH');
+assert.ok(!/command:\s*\[[^\]]*apiKey/.test(panel), 'no command may take the API key');
 assert.match(panel, /component\s+SettingChip/);
 for (const method of ['openSettings', 'closeSettings', 'saveSetting', 'commitApiKey'])
   assert.match(panel, new RegExp(`function\\s+${method}\\s*\\(`));

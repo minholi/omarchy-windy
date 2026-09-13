@@ -3,7 +3,20 @@
 // be exercised by Node in CI (see model.test.mjs).
 
 var API_URL = "https://api.windy.com/api/point-forecast/v2"
+var IP_LOCATION_URL = "https://ipwho.is/"
+var GEOCODING_URL = "https://geocoding-api.open-meteo.com/v1/search"
 var FALLBACK_MODEL = "gfs"
+
+// Fixed, trusted executable. Requests never resolve curl through PATH, so an
+// entry in the widget's environment cannot substitute another binary.
+var CURL_PATH = "/usr/bin/curl"
+
+// Producer-side response ceilings. StdioCollector buffers whatever the producer
+// writes, so curl itself is told to give up (exit 63) instead of letting a
+// hostile or malformed response grow shell memory: point forecasts are a few
+// tens of kilobytes, the metadata lookups a few kilobytes.
+var MAX_FORECAST_BYTES = 262144
+var MAX_METADATA_BYTES = 65536
 
 // Point Forecast models with the region boxes autoModel() tests, most
 // specific first. Global models carry no bounds and are never auto-picked.
@@ -473,6 +486,54 @@ function requestError(payload) {
   return null
 }
 
+// Shared curl invocation: quiet on success, verbose on failure, bounded in time
+// and in bytes written to stdout.
+function curlArguments(options) {
+  var opts = options || {}
+  var args = [CURL_PATH, "-sS"]
+  args.push(opts.failWithBody ? "--fail-with-body" : "--fail")
+  args.push("--max-time", String(opts.timeoutSeconds))
+  args.push("--max-filesize", String(opts.maxBytes))
+  return args
+}
+
+// The forecast request body carries the Windy API key, so it is written to
+// curl's stdin ("--data-binary @-") rather than passed as an argument: process
+// arguments are readable from /proc while the request runs and are logged when
+// the process fails to start. Pair with Process { stdinEnabled: true }.
+function forecastRequestCommand() {
+  return curlArguments({
+    timeoutSeconds: 10,
+    maxBytes: MAX_FORECAST_BYTES,
+    failWithBody: true
+  }).concat(["-X", "POST",
+    "-H", "Content-Type: application/json",
+    "--data-binary", "@-",
+    API_URL])
+}
+
+// The exact bytes written to the request's stdin.
+function forecastRequestBody(payload) {
+  if (!payload || typeof payload !== "object") return ""
+  return JSON.stringify(payload)
+}
+
+function ipLocationCommand() {
+  return curlArguments({ timeoutSeconds: 8, maxBytes: MAX_METADATA_BYTES }).concat([IP_LOCATION_URL])
+}
+
+function geocodeUrl(query, count) {
+  return GEOCODING_URL + "?name=" + encodeURIComponent(String(query))
+    + "&count=" + count + "&language=en&format=json"
+}
+
+function geocodeCommand(query, count, timeoutSeconds) {
+  return curlArguments({
+    timeoutSeconds: timeoutSeconds || 6,
+    maxBytes: MAX_METADATA_BYTES
+  }).concat([geocodeUrl(query, count)])
+}
+
 function parseResponse(rawText) {
   var text = String(rawText === undefined || rawText === null ? "" : rawText).replace(/^\s+|\s+$/g, "")
   if (!text) return { ok: false, error: "Empty response (model may not cover this location)" }
@@ -655,6 +716,11 @@ function dailyForecast(data, level, nowMs, days, tzOffsetMinutes) {
 if (typeof module !== "undefined") {
   module.exports = {
     API_URL: API_URL,
+    IP_LOCATION_URL: IP_LOCATION_URL,
+    GEOCODING_URL: GEOCODING_URL,
+    CURL_PATH: CURL_PATH,
+    MAX_FORECAST_BYTES: MAX_FORECAST_BYTES,
+    MAX_METADATA_BYTES: MAX_METADATA_BYTES,
     FALLBACK_MODEL: FALLBACK_MODEL,
     MODELS: MODELS,
     LEVELS: LEVELS,
@@ -700,6 +766,12 @@ if (typeof module !== "undefined") {
     resolveLevel: resolveLevel,
     requestPayload: requestPayload,
     requestError: requestError,
+    curlArguments: curlArguments,
+    forecastRequestCommand: forecastRequestCommand,
+    forecastRequestBody: forecastRequestBody,
+    ipLocationCommand: ipLocationCommand,
+    geocodeUrl: geocodeUrl,
+    geocodeCommand: geocodeCommand,
     parseResponse: parseResponse,
     responseValue: responseValue,
     forecastPoint: forecastPoint,
