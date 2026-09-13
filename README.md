@@ -4,6 +4,8 @@ A wind, rain, and temperature bar widget for [Omarchy](https://omarchy.org) Quat
 
 ![Windy panel](preview.png)
 
+![Windy bar pill](screenshot-bar.png)
+
 - **Bar pill**: condition icon + temperature by default; optionally the rotating wind arrow + speed, or both.
 - **Panel**: current conditions, an 8-point hourly outlook (condition, temperature, wind, rain), and a 4-day forecast.
 - **Location**: shares `weather.json` with Omarchy's stock weather widget. Click the location to search (Open-Meteo geocoding), or let it auto-detect by IP.
