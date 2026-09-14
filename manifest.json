@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "io.github.minholi.windy",
   "name": "Windy",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "author": "Marcelo Minholi",
   "license": "MIT",
   "description": "Condition, temperature, rain, and wind forecast in the bar, backed by the Windy Point Forecast API",
@@ -25,7 +25,6 @@
     "allowMultiple": false,
     "defaultSection": "center",
     "defaults": {
-      "apiKey": "",
       "model": "auto",
       "unit": "kn",
       "temperatureUnit": "auto",
@@ -34,13 +33,6 @@
       "refreshMinutes": 15
     },
     "schema": [
-      {
-        "key": "apiKey",
-        "type": "string",
-        "label": "Windy API key",
-        "description": "Point Forecast key from https://account.windy.com/keys. Leave blank to read the WINDY_API_KEY environment variable.",
-        "defaultValue": ""
-      },
       {
         "key": "model",
         "type": "enum",

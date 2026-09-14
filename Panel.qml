@@ -18,9 +18,25 @@ Panel {
   readonly property var barIdentity: hostWidget || root
 
   // ---- Settings -------------------------------------------------------------
+  // The API key lives in the login keyring (Secret Service). shell.json only
+  // ever holds a legacy plaintext value, which is migrated into the keyring and
+  // stripped on the first load after this version, so no credential stays in a
+  // broadly readable config file.
+  property string keyringKey: ""
+  property string keyringError: ""
+  property string keyringStoreBody: ""
+  property string keyringPendingValue: ""
+  property bool keyringStoreIsMigration: false
+  property bool keyringStoreStarted: false
+  property bool keyringClearStarted: false
+  property bool migrationAttempted: false
+
+  readonly property string legacyKey: Model.legacyApiKey(setting("apiKey", ""))
   readonly property string apiKey: {
-    var configured = String(setting("apiKey", "") || "")
-    if (configured !== "") return configured
+    // A legacy shell.json value wins once, so a CLI-written key keeps working
+    // until the widget has migrated and stripped it.
+    if (legacyKey !== "") return legacyKey
+    if (keyringKey !== "") return keyringKey
     return String(Quickshell.env("WINDY_API_KEY") || "")
   }
   readonly property string unit: Model.resolveUnit(setting("unit", "kn"))
@@ -410,7 +426,7 @@ Panel {
   }
 
   readonly property string statusText: {
-    if (apiKey === "") return "Set your API key: omarchy bar set minholi.windy apiKey <key>"
+    if (apiKey === "") return "Set your Windy API key from the gear in this panel"
     if (locationError !== "") return locationError
     if (detectingLocation) return "Detecting location…"
     if (!location && locationFailed) return "Couldn't detect a location. Set one with: omarchy-weather-location --set City 48.2,16.4"
@@ -642,10 +658,143 @@ Panel {
       root.bar.shell.updateEntryInline(root.moduleName, entry)
   }
 
+  // Reads the key once at startup. The child keeps a closed environment except
+  // for what D-Bus needs. A missing secret-tool or an unavailable keyring
+  // simply leaves keyringKey empty, and the legacy value or WINDY_API_KEY
+  // keeps working.
+  Process {
+    id: keyringLookupProc
+    command: Model.secretLookupCommand()
+    clearEnvironment: true
+    environment: Model.keyringEnvironment(Quickshell.env("XDG_RUNTIME_DIR"),
+      Quickshell.env("DBUS_SESSION_BUS_ADDRESS"))
+    running: true
+    stdout: StdioCollector {
+      id: keyringLookupStdout
+      waitForEnd: true
+      property string raw: ""
+      onStreamFinished: raw = String(text || "")
+    }
+    onExited: function(exitCode) {
+      if (exitCode === 0) root.keyringKey = Model.trimSecret(keyringLookupStdout.raw)
+      root.maybeMigrateLegacyKey()
+    }
+  }
+
+  // Writes one credential to the keyring. The secret travels over stdin and is
+  // never part of a command line.
+  Process {
+    id: keyringStoreProc
+    stdinEnabled: root.keyringStoreBody !== ""
+    clearEnvironment: true
+    environment: Model.keyringEnvironment(Quickshell.env("XDG_RUNTIME_DIR"),
+      Quickshell.env("DBUS_SESSION_BUS_ADDRESS"))
+    onStarted: {
+      root.keyringStoreStarted = true
+      if (root.keyringStoreBody === "") return
+      write(root.keyringStoreBody)
+      // Clearing the body flips stdinEnabled, closing the pipe so secret-tool
+      // sees EOF and stores the value.
+      root.keyringStoreBody = ""
+    }
+    onExited: function(exitCode) {
+      var value = root.keyringPendingValue
+      var migrating = root.keyringStoreIsMigration
+      root.keyringPendingValue = ""
+      root.keyringStoreIsMigration = false
+      if (exitCode !== 0) {
+        root.keyringError = "Couldn't save the key to the login keyring"
+        return
+      }
+      root.keyringError = ""
+      root.keyringKey = value
+      if (migrating) {
+        root.stripLegacyApiKey()
+        return
+      }
+      if (apiKeyField) apiKeyField.text = ""
+      root.apiKeySaved = true
+      apiKeySavedTimer.restart()
+    }
+    onRunningChanged: {
+      if (running) return
+      var started = root.keyringStoreStarted
+      root.keyringStoreStarted = false
+      if (started || root.keyringPendingValue === "") return
+      root.keyringPendingValue = ""
+      root.keyringStoreIsMigration = false
+      root.keyringStoreBody = ""
+      root.keyringError = "secret-tool is missing at " + Model.SECRET_TOOL_PATH
+    }
+  }
+
+  Process {
+    id: keyringClearProc
+    command: Model.secretClearCommand()
+    clearEnvironment: true
+    environment: Model.keyringEnvironment(Quickshell.env("XDG_RUNTIME_DIR"),
+      Quickshell.env("DBUS_SESSION_BUS_ADDRESS"))
+    onStarted: root.keyringClearStarted = true
+    onExited: function(exitCode) {
+      if (exitCode !== 0) {
+        root.keyringError = "Couldn't clear the key from the login keyring"
+        return
+      }
+      root.keyringError = ""
+      root.keyringKey = ""
+      root.stripLegacyApiKey()
+      if (apiKeyField) apiKeyField.text = ""
+      root.apiKeySaved = true
+      apiKeySavedTimer.restart()
+    }
+    onRunningChanged: {
+      if (running) return
+      var started = root.keyringClearStarted
+      root.keyringClearStarted = false
+      if (started) return
+      root.keyringError = "secret-tool is missing at " + Model.SECRET_TOOL_PATH
+    }
+  }
+
+  function startKeyringStore(value, migrating) {
+    if (keyringStoreProc.running) return
+    keyringError = ""
+    keyringPendingValue = String(value)
+    keyringStoreIsMigration = migrating === true
+    keyringStoreBody = String(value)
+    keyringStoreProc.command = Model.secretStoreCommand()
+    keyringStoreProc.running = true
+  }
+
+  // One-time migration: a pre-keyring install kept the key in shell.json.
+  // The plaintext is removed only after the keyring write succeeded, so a
+  // failure leaves the widget working from the legacy value.
+  function maybeMigrateLegacyKey() {
+    if (migrationAttempted || legacyKey === "") return
+    migrationAttempted = true
+    startKeyringStore(legacyKey, true)
+  }
+
+  // updateEntryInline replaces the whole entry, so omitting apiKey is what
+  // removes the plaintext credential from shell.json.
+  function stripLegacyApiKey() {
+    if (legacyKey === "") return
+    var entry = Model.entryWithoutApiKey(root.settings)
+    entry.id = root.moduleName
+    root.settings = entry
+    if (root.bar && root.bar.shell && typeof root.bar.shell.updateEntryInline === "function")
+      root.bar.shell.updateEntryInline(root.moduleName, entry)
+  }
+
   function commitApiKey() {
-    saveSetting("apiKey", String(apiKeyField.text || "").replace(/^\s+|\s+$/g, ""))
-    apiKeySaved = true
-    apiKeySavedTimer.restart()
+    var value = Model.trimSecret(apiKeyField.text)
+    if (value === "") {
+      if (keyringClearProc.running) return
+      keyringError = ""
+      keyringClearProc.running = true
+      return
+    }
+    startKeyringStore(value, false)
   }
 
   Timer {
@@ -1013,12 +1162,16 @@ Panel {
                 font.letterSpacing: 1
               }
 
-              Row {
-                spacing: Style.space(8)
+              Item {
+                width: parent.width
+                height: Math.max(apiKeyField.implicitHeight, apiKeySaveButton.implicitHeight)
 
                 TextField {
                   id: apiKeyField
-                  width: Style.space(300)
+                  anchors.left: parent.left
+                  anchors.right: apiKeySaveButton.left
+                  anchors.rightMargin: Style.space(8)
+                  anchors.verticalCenter: parent.verticalCenter
                   password: true
                   placeholderText: root.apiKey === "" ? "Paste your Windy API key" : "Key set — paste to replace"
                   foreground: root.barForeground
@@ -1035,11 +1188,17 @@ Panel {
                   }
                 }
 
-                SettingChip {
-                  label: root.apiKeySaved ? "Saved" : "Save"
+                Button {
+                  id: apiKeySaveButton
+                  anchors.right: parent.right
+                  anchors.verticalCenter: parent.verticalCenter
+                  text: root.apiKeySaved ? "Saved" : "Save"
                   foreground: root.barForeground
                   fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
-                  onPicked: root.commitApiKey()
+                  bordered: true
+                  selected: root.apiKeySaved
+                  verticalPadding: Style.spacing.inputPaddingY
+                  onClicked: root.commitApiKey()
                 }
               }
 
@@ -1047,8 +1206,19 @@ Panel {
                 width: parent.width
                 wrapMode: Text.WordWrap
                 textFormat: Text.PlainText
-                text: "Saved to shell.json. Leave blank and save to clear; WINDY_API_KEY is the fallback."
+                text: "Stored in your login keyring. Leave blank and save to clear; WINDY_API_KEY is the fallback."
                 color: Qt.darker(root.barForeground, 1.5)
+                font.family: root.bar ? root.bar.fontFamily : Style.font.family
+                font.pixelSize: Style.font.caption
+              }
+
+              Text {
+                visible: root.keyringError !== ""
+                width: parent.width
+                wrapMode: Text.WordWrap
+                textFormat: Text.PlainText
+                text: root.keyringError
+                color: root.bar ? root.bar.urgent : Color.urgent
                 font.family: root.bar ? root.bar.fontFamily : Style.font.family
                 font.pixelSize: Style.font.caption
               }

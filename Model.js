@@ -11,6 +11,13 @@ var FALLBACK_MODEL = "gfs"
 // entry in the widget's environment cannot substitute another binary.
 var CURL_PATH = "/usr/bin/curl"
 
+// The API key lives in the login keyring (Secret Service), never in shell.json.
+// secret-tool is addressed by absolute path, and the key reaches `store` over
+// stdin so it never appears in a process command line.
+var SECRET_TOOL_PATH = "/usr/bin/secret-tool"
+var SECRET_LABEL = "Windy API key"
+var SECRET_ATTRIBUTES = ["service", "windy", "account", "io.github.minholi.windy"]
+
 // Producer-side response ceilings. StdioCollector buffers whatever the producer
 // writes, so curl itself is told to give up (exit 63) instead of letting a
 // hostile or malformed response grow shell memory: point forecasts are a few
@@ -534,6 +541,51 @@ function geocodeCommand(query, count, timeoutSeconds) {
   }).concat([geocodeUrl(query, count)])
 }
 
+// ---- Credentials -----------------------------------------------------------
+// secret-tool talks to the Secret Service over the session D-Bus, so a closed
+// child environment still has to carry the bus address (or the runtime dir GLib
+// falls back to). Everything else stays unset.
+function keyringEnvironment(runtimeDir, busAddress) {
+  var env = {}
+  if (runtimeDir) env.XDG_RUNTIME_DIR = String(runtimeDir)
+  if (busAddress) env.DBUS_SESSION_BUS_ADDRESS = String(busAddress)
+  return env
+}
+
+function secretLookupCommand() {
+  return [SECRET_TOOL_PATH, "lookup"].concat(SECRET_ATTRIBUTES)
+}
+
+// Pair with Process { stdinEnabled: true }: the secret is written to stdin,
+// never passed as an argument.
+function secretStoreCommand() {
+  return [SECRET_TOOL_PATH, "store", "--label=" + SECRET_LABEL].concat(SECRET_ATTRIBUTES)
+}
+
+function secretClearCommand() {
+  return [SECRET_TOOL_PATH, "clear"].concat(SECRET_ATTRIBUTES)
+}
+
+// Lookup output gains a trailing newline (secret-tool prints it to a pipe).
+// Keys are single-line tokens, so surrounding whitespace is never meaningful.
+function trimSecret(raw) {
+  return String(raw === undefined || raw === null ? "" : raw).replace(/^\s+|\s+$/g, "")
+}
+
+// A pre-keyring install kept the key in shell.json. The widget migrates that
+// value once and then strips it from the entry, so no plaintext credential
+// survives in the config.
+function legacyApiKey(settingValue) {
+  return trimSecret(settingValue)
+}
+
+function entryWithoutApiKey(entry) {
+  var out = {}
+  if (entry && typeof entry === "object")
+    for (var k in entry) if (k !== "apiKey") out[k] = entry[k]
+  return out
+}
+
 function parseResponse(rawText) {
   var text = String(rawText === undefined || rawText === null ? "" : rawText).replace(/^\s+|\s+$/g, "")
   if (!text) return { ok: false, error: "Empty response (model may not cover this location)" }
@@ -719,6 +771,9 @@ if (typeof module !== "undefined") {
     IP_LOCATION_URL: IP_LOCATION_URL,
     GEOCODING_URL: GEOCODING_URL,
     CURL_PATH: CURL_PATH,
+    SECRET_TOOL_PATH: SECRET_TOOL_PATH,
+    SECRET_LABEL: SECRET_LABEL,
+    SECRET_ATTRIBUTES: SECRET_ATTRIBUTES,
     MAX_FORECAST_BYTES: MAX_FORECAST_BYTES,
     MAX_METADATA_BYTES: MAX_METADATA_BYTES,
     FALLBACK_MODEL: FALLBACK_MODEL,
@@ -772,6 +827,13 @@ if (typeof module !== "undefined") {
     ipLocationCommand: ipLocationCommand,
     geocodeUrl: geocodeUrl,
     geocodeCommand: geocodeCommand,
+    keyringEnvironment: keyringEnvironment,
+    secretLookupCommand: secretLookupCommand,
+    secretStoreCommand: secretStoreCommand,
+    secretClearCommand: secretClearCommand,
+    trimSecret: trimSecret,
+    legacyApiKey: legacyApiKey,
+    entryWithoutApiKey: entryWithoutApiKey,
     parseResponse: parseResponse,
     responseValue: responseValue,
     forecastPoint: forecastPoint,

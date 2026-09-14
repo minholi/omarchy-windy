@@ -9,13 +9,15 @@ A wind, rain, and temperature bar widget for [Omarchy](https://omarchy.org) Quat
 - **Bar pill**: condition icon + temperature by default; optionally the rotating wind arrow + speed, or both.
 - **Panel**: current conditions, an 8-point hourly outlook (condition, temperature, wind, rain), and a 4-day forecast.
 - **Location**: shares `weather.json` with Omarchy's stock weather widget. Click the location to search (Open-Meteo geocoding), or let it auto-detect by IP.
-- **Settings**: API key, wind unit, temperature unit, and bar display, from the gear in the panel or the CLI.
+- **Settings**: wind unit, temperature unit, and bar display, from the gear in the panel or the CLI.
+- **Credentials**: the API key is stored in the login keyring (Secret Service), never in a config file.
 
 ## Requirements
 
 - Omarchy with the Omarchy shell (Quattro).
 - A free Windy **Point Forecast** API key: <https://account.windy.com/keys>.
-- `curl` at `/usr/bin/curl` (preinstalled on Omarchy).
+- `curl` at `/usr/bin/curl` and `secret-tool` at `/usr/bin/secret-tool` (both preinstalled on Omarchy).
+- A running Secret Service provider; Omarchy's default `gnome-keyring` passwordless keyring qualifies.
 
 The widget uses these network services at runtime:
 
@@ -43,19 +45,38 @@ malformed response cannot grow the shell's in-memory buffer without limit.
 Because the environment is closed, proxy variables such as `https_proxy` do not
 apply to these requests.
 
+## Credentials
+
+The API key is stored in the login keyring through `secret-tool` under the
+attributes `service windy account io.github.minholi.windy`. It is never written
+to `shell.json`: the widget talks to the keyring with `lookup`, `store`, and
+`clear`, pipes the key to `store` over stdin so it never appears in a process
+command line, and runs `secret-tool` by absolute path with a minimal
+environment limited to the D-Bus session address.
+
+Set the key through the gear icon in the panel (leave the field blank and save
+to remove it). From the CLI, use the same keyring entry:
+
+```bash
+printf '%s' '<your-key>' | secret-tool store --label='Windy API key' service windy account io.github.minholi.windy
+secret-tool clear service windy account io.github.minholi.windy   # remove
+```
+
+Versions before 1.0.3 kept the key in `shell.json`. On first load the widget
+migrates that value into the keyring and strips the plaintext entry; the
+migration only removes the legacy value after the keyring write succeeded.
+
+As a fallback, the plugin reads the `WINDY_API_KEY` environment variable when
+neither the keyring nor a legacy value holds a key.
+
 ## Install
 
 ```bash
 omarchy plugin add https://github.com/minholi/omarchy-windy.git --enable
 ```
 
-Add your API key, either through the gear icon in the panel or from the CLI:
-
-```bash
-omarchy bar set io.github.minholi.windy apiKey <your-key>
-```
-
-As a fallback, the plugin reads the `WINDY_API_KEY` environment variable when no key is configured.
+Add your API key through the gear icon in the panel, or from the CLI as shown
+under [Credentials](#credentials).
 
 ## Remove
 
@@ -67,9 +88,10 @@ omarchy plugin remove io.github.minholi.windy --yes
 
 Set values with `omarchy bar set io.github.minholi.windy <key> <value>` or through the panel's gear icon.
 
+The API key is a credential and lives in the keyring — see [Credentials](#credentials).
+
 | Key | Values | Default | Description |
 | --- | --- | --- | --- |
-| `apiKey` | string | `""` | Windy Point Forecast key. Blank falls back to `WINDY_API_KEY`. |
 | `unit` | `kn`, `kmh`, `mph`, `ms` | `kn` | Wind speed unit. |
 | `temperatureUnit` | `auto`, `c`, `f` | `auto` | Auto resolves by the location's country, then the locale. Rain follows: mm with °C, inches with °F. |
 | `display` | `temp`, `wind`, `both` | `temp` | Bar pill: condition + temperature, rotating arrow + speed, or all four. |

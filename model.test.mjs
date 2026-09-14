@@ -35,6 +35,10 @@ for (const row of manifest.barWidget.schema) {
   }
 }
 
+// The API key is a keyring credential; it is not a shell.json setting.
+assert.ok(!Object.prototype.hasOwnProperty.call(manifest.barWidget.defaults, 'apiKey'));
+assert.equal(schemaRow('apiKey'), undefined);
+
 // Every enum the settings UI can write must be understood by the model.
 for (const option of schemaRow('model').options) {
   const resolved = model.resolveModel(option, 48.85, 2.35);
@@ -246,6 +250,52 @@ assert.equal(model.geocodeCommand('São Paulo', 5, 5)[model.geocodeCommand('São
 assert.equal(model.geocodeCommand('Malibu', 1)[model.geocodeCommand('Malibu', 1).indexOf('--max-time') + 1], '6');
 assert.ok(model.curlArguments({timeoutSeconds: 3, maxBytes: 10}).includes('--fail'));
 
+// ---- Keyring credentials ---------------------------------------------------
+// The API key lives in the login keyring, and secret-tool is addressed by
+// absolute path like curl. `store` receives the key over stdin, so the key
+// never appears in a process command line.
+assert.equal(model.SECRET_TOOL_PATH, '/usr/bin/secret-tool');
+assert.ok(model.SECRET_ATTRIBUTES.length >= 2 && model.SECRET_ATTRIBUTES.length % 2 === 0);
+assert.ok(model.SECRET_ATTRIBUTES.includes('io.github.minholi.windy'));
+
+const lookupCommand = [...model.secretLookupCommand()];
+assert.equal(lookupCommand[0], model.SECRET_TOOL_PATH);
+assert.equal(lookupCommand[1], 'lookup');
+assert.deepEqual(lookupCommand.slice(2), [...model.SECRET_ATTRIBUTES]);
+
+const storeCommand = [...model.secretStoreCommand()];
+assert.equal(storeCommand[0], model.SECRET_TOOL_PATH);
+assert.equal(storeCommand[1], 'store');
+assert.equal(storeCommand[2], '--label=' + model.SECRET_LABEL);
+assert.deepEqual(storeCommand.slice(3), [...model.SECRET_ATTRIBUTES]);
+assert.ok(!storeCommand.join('\u0000').includes('WINDY-KEY-SECRET'), 'the key must not reach argv');
+assert.ok(!storeCommand.includes('@-'), 'store reads the key from stdin, not from a file argument');
+
+const clearCommand = [...model.secretClearCommand()];
+assert.equal(clearCommand[0], model.SECRET_TOOL_PATH);
+assert.equal(clearCommand[1], 'clear');
+assert.deepEqual(clearCommand.slice(2), [...model.SECRET_ATTRIBUTES]);
+
+assert.equal(JSON.stringify(model.keyringEnvironment('/run/user/1000', 'unix:path=/run/user/1000/bus')),
+  '{"XDG_RUNTIME_DIR":"/run/user/1000","DBUS_SESSION_BUS_ADDRESS":"unix:path=/run/user/1000/bus"}');
+assert.equal(JSON.stringify(model.keyringEnvironment('/run/user/1000', '')),
+  '{"XDG_RUNTIME_DIR":"/run/user/1000"}');
+assert.equal(JSON.stringify(model.keyringEnvironment('', 'unix:path=/run/user/1000/bus')),
+  '{"DBUS_SESSION_BUS_ADDRESS":"unix:path=/run/user/1000/bus"}');
+assert.equal(JSON.stringify(model.keyringEnvironment('', '')), '{}');
+
+assert.equal(model.trimSecret('WINDY-KEY-SECRET\n'), 'WINDY-KEY-SECRET');
+assert.equal(model.trimSecret('  WINDY-KEY-SECRET  '), 'WINDY-KEY-SECRET');
+assert.equal(model.trimSecret(null), '');
+assert.equal(model.trimSecret(undefined), '');
+
+assert.equal(model.legacyApiKey(' WINDY-KEY-SECRET\n'), 'WINDY-KEY-SECRET');
+assert.equal(model.legacyApiKey(''), '');
+const legacyEntry = {id: 'io.github.minholi.windy', apiKey: 'WINDY-KEY-SECRET', unit: 'kmh', display: 'both'};
+assert.equal(JSON.stringify(model.entryWithoutApiKey(legacyEntry)),
+  '{"id":"io.github.minholi.windy","unit":"kmh","display":"both"}');
+assert.equal(JSON.stringify(model.entryWithoutApiKey(null)), '{}');
+
 // ---- Weather parameters and levels -----------------------------------------
 assert.ok(!model.requestParameters('gfs').includes('weatherWarnings'));
 assert.ok(model.requestParameters('iconEu').includes('weatherWarnings'));
@@ -450,6 +500,16 @@ assert.match(panel, /clearEnvironment:\s*true/);
 assert.match(panel, /environment:\s*\(\{\}\)/);
 assert.ok(!panel.includes('["curl"'), 'Panel must not run curl from PATH');
 assert.ok(!/command:\s*\[[^\]]*apiKey/.test(panel), 'no command may take the API key');
+// Credentials come from the keyring and the key is piped to secret-tool's stdin.
+assert.match(panel, /Model\.secretLookupCommand\(/);
+assert.match(panel, /Model\.secretStoreCommand\(/);
+assert.match(panel, /Model\.secretClearCommand\(/);
+assert.match(panel, /stdinEnabled:\s*root\.keyringStoreBody !== ""/);
+assert.match(panel, /write\(root\.keyringStoreBody\)/);
+assert.match(panel, /environment:\s*Model\.keyringEnvironment\(/);
+assert.match(panel, /Model\.entryWithoutApiKey\(/);
+assert.ok(!/saveSetting\(\s*"apiKey"/.test(panel), 'the API key must not be written to shell.json');
+assert.ok(!panel.includes('omarchy bar set'), 'the API key is set through the keyring, not shell.json');
 assert.match(panel, /component\s+SettingChip/);
 for (const method of ['openSettings', 'closeSettings', 'saveSetting', 'commitApiKey'])
   assert.match(panel, new RegExp(`function\\s+${method}\\s*\\(`));
