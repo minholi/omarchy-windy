@@ -7,8 +7,8 @@ import "Model.js" as Model
 
 Panel {
   id: root
-  moduleName: "io.github.minholi.windy"
-  ipcTarget: "io.github.minholi.windy"
+  moduleName: "minholi.windy"
+  ipcTarget: "minholi.windy"
   manageIpc: false
 
   property var anchorItem: null

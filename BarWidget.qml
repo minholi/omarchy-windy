@@ -7,7 +7,7 @@ import qs.Ui
 // and forwards the lifecycle calls the shell routes through it.
 BarWidget {
   id: root
-  moduleName: "io.github.minholi.windy"
+  moduleName: "minholi.windy"
 
   readonly property var panelItem: panelLoader.item
   readonly property var current: panelItem ? panelItem.current : null

@@ -18,7 +18,7 @@ function schemaRow(key) {
 
 // ---- Manifest contract -----------------------------------------------------
 assert.equal(manifest.schemaVersion, 1);
-assert.equal(manifest.id, 'io.github.minholi.windy');
+assert.equal(manifest.id, 'minholi.windy');
 assert.equal(manifest.kinds.length, 1);
 assert.equal(manifest.kinds[0], 'bar-widget');
 assert.equal(manifest.entryPoints.barWidget, 'BarWidget.qml');
@@ -256,7 +256,9 @@ assert.ok(model.curlArguments({timeoutSeconds: 3, maxBytes: 10}).includes('--fai
 // never appears in a process command line.
 assert.equal(model.SECRET_TOOL_PATH, '/usr/bin/secret-tool');
 assert.ok(model.SECRET_ATTRIBUTES.length >= 2 && model.SECRET_ATTRIBUTES.length % 2 === 0);
-assert.ok(model.SECRET_ATTRIBUTES.includes('io.github.minholi.windy'));
+assert.ok(model.SECRET_ATTRIBUTES.includes('minholi.windy'));
+assert.equal(model.SECRET_ATTRIBUTES[model.SECRET_ATTRIBUTES.indexOf('account') + 1], manifest.id,
+  'the keyring account attribute follows the plugin id');
 
 const lookupCommand = [...model.secretLookupCommand()];
 assert.equal(lookupCommand[0], model.SECRET_TOOL_PATH);
@@ -291,9 +293,9 @@ assert.equal(model.trimSecret(undefined), '');
 
 assert.equal(model.legacyApiKey(' WINDY-KEY-SECRET\n'), 'WINDY-KEY-SECRET');
 assert.equal(model.legacyApiKey(''), '');
-const legacyEntry = {id: 'io.github.minholi.windy', apiKey: 'WINDY-KEY-SECRET', unit: 'kmh', display: 'both'};
+const legacyEntry = {id: 'minholi.windy', apiKey: 'WINDY-KEY-SECRET', unit: 'kmh', display: 'both'};
 assert.equal(JSON.stringify(model.entryWithoutApiKey(legacyEntry)),
-  '{"id":"io.github.minholi.windy","unit":"kmh","display":"both"}');
+  '{"id":"minholi.windy","unit":"kmh","display":"both"}');
 assert.equal(JSON.stringify(model.entryWithoutApiKey(null)), '{}');
 
 // ---- Weather parameters and levels -----------------------------------------
@@ -451,7 +453,7 @@ assert.equal(model.dailyForecast(null, 'surface', dayBase, 3, 0).length, 0);
 // ---- QML scaffold ----------------------------------------------------------
 const barWidget = fs.readFileSync(new URL('./BarWidget.qml', import.meta.url), 'utf8');
 assert.match(barWidget, /^BarWidget\s*\{/m);
-assert.match(barWidget, /moduleName:\s*"io\.github\.minholi\.windy"/);
+assert.match(barWidget, /moduleName:\s*"minholi\.windy"/);
 for (const method of ['open', 'close', 'toggle', 'closeForPopoutSwitch'])
   assert.match(barWidget, new RegExp(`function\\s+${method}\\s*\\(`));
 assert.match(barWidget, /source:\s*Qt\.resolvedUrl\("Panel\.qml"\)/);
@@ -469,7 +471,7 @@ assert.doesNotMatch(barWidget, /\bIpcHandler\s*\{/);
 
 const panel = fs.readFileSync(new URL('./Panel.qml', import.meta.url), 'utf8');
 assert.match(panel, /^Panel\s*\{/m);
-assert.match(panel, /ipcTarget:\s*"io\.github\.minholi\.windy"/);
+assert.match(panel, /ipcTarget:\s*"minholi\.windy"/);
 assert.match(panel, /manageIpc:\s*false/);
 assert.match(panel, /function\s+openFromHotkey\s*\(/);
 assert.match(panel, /function\s+refresh\s*\(/);

@@ -16,7 +16,7 @@ var CURL_PATH = "/usr/bin/curl"
 // stdin so it never appears in a process command line.
 var SECRET_TOOL_PATH = "/usr/bin/secret-tool"
 var SECRET_LABEL = "Windy API key"
-var SECRET_ATTRIBUTES = ["service", "windy", "account", "io.github.minholi.windy"]
+var SECRET_ATTRIBUTES = ["service", "windy", "account", "minholi.windy"]
 
 // Producer-side response ceilings. StdioCollector buffers whatever the producer
 // writes, so curl itself is told to give up (exit 63) instead of letting a

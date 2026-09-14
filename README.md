@@ -48,7 +48,7 @@ apply to these requests.
 ## Credentials
 
 The API key is stored in the login keyring through `secret-tool` under the
-attributes `service windy account io.github.minholi.windy`. It is never written
+attributes `service windy account minholi.windy`. It is never written
 to `shell.json`: the widget talks to the keyring with `lookup`, `store`, and
 `clear`, pipes the key to `store` over stdin so it never appears in a process
 command line, and runs `secret-tool` by absolute path with a minimal
@@ -58,8 +58,8 @@ Set the key through the gear icon in the panel (leave the field blank and save
 to remove it). From the CLI, use the same keyring entry:
 
 ```bash
-printf '%s' '<your-key>' | secret-tool store --label='Windy API key' service windy account io.github.minholi.windy
-secret-tool clear service windy account io.github.minholi.windy   # remove
+printf '%s' '<your-key>' | secret-tool store --label='Windy API key' service windy account minholi.windy
+secret-tool clear service windy account minholi.windy   # remove
 ```
 
 Versions before 1.0.3 kept the key in `shell.json`. On first load the widget
@@ -81,12 +81,12 @@ under [Credentials](#credentials).
 ## Remove
 
 ```bash
-omarchy plugin remove io.github.minholi.windy --yes
+omarchy plugin remove minholi.windy --yes
 ```
 
 ## Settings
 
-Set values with `omarchy bar set io.github.minholi.windy <key> <value>` or through the panel's gear icon.
+Set values with `omarchy bar set minholi.windy <key> <value>` or through the panel's gear icon.
 
 The API key is a credential and lives in the keyring — see [Credentials](#credentials).
 
@@ -106,11 +106,11 @@ The widget reads and writes the same state file as Omarchy's stock weather widge
 ## Commands
 
 ```bash
-omarchy-shell io.github.minholi.windy status    # JSON snapshot (location, current, hourly, daily, tooltip)
-omarchy-shell io.github.minholi.windy refresh   # force a fetch
-omarchy-shell io.github.minholi.windy toggle    # open/close the panel
-omarchy-shell io.github.minholi.windy edit      # open the location editor
-omarchy-shell io.github.minholi.windy settings  # open the settings view
+omarchy-shell minholi.windy status    # JSON snapshot (location, current, hourly, daily, tooltip)
+omarchy-shell minholi.windy refresh   # force a fetch
+omarchy-shell minholi.windy toggle    # open/close the panel
+omarchy-shell minholi.windy edit      # open the location editor
+omarchy-shell minholi.windy settings  # open the settings view
 ```
 
 ## Development

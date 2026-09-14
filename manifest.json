@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
-  "id": "io.github.minholi.windy",
+  "id": "minholi.windy",
   "name": "Windy",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "author": "Marcelo Minholi",
   "license": "MIT",
   "description": "Condition, temperature, rain, and wind forecast in the bar, backed by the Windy Point Forecast API",
