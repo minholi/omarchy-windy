@@ -72,6 +72,20 @@ var CONDITION_ICONS = {
   thunder: { day: "\ue31d", night: "\ue31d" }
 }
 
+// Short human-readable text for each derived condition, shown under the
+// location in the panel hero.
+var CONDITION_LABELS = {
+  clear: "Clear",
+  partly: "Partly cloudy",
+  cloudy: "Cloudy",
+  fog: "Fog",
+  drizzle: "Drizzle",
+  rain: "Rain",
+  snow: "Snow",
+  sleet: "Sleet",
+  thunder: "Thunderstorm"
+}
+
 var CONDITION_SEVERITY = {
   clear: 0, partly: 1, cloudy: 2, fog: 3,
   drizzle: 4, rain: 5, sleet: 6, snow: 7, thunder: 8
@@ -271,6 +285,10 @@ function conditionIcon(condition, night) {
   var icons = CONDITION_ICONS[String(condition)]
   if (!icons) return ""
   return night ? icons.night : icons.day
+}
+
+function conditionLabel(condition) {
+  return CONDITION_LABELS[String(condition)] || ""
 }
 
 function weatherWarningCondition(code) {
@@ -805,6 +823,7 @@ if (typeof module !== "undefined") {
     precipValue: precipValue,
     formatPrecip: formatPrecip,
     conditionIcon: conditionIcon,
+    conditionLabel: conditionLabel,
     weatherWarningCondition: weatherWarningCondition,
     deriveCondition: deriveCondition,
     conditionSeverity: conditionSeverity,

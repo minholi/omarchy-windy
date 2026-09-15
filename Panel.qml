@@ -1068,7 +1068,7 @@ Panel {
                 textFormat: Text.PlainText
                 visible: root.current && root.current.condition !== ""
                 anchors.left: parent.left
-                text: root.current ? root.current.condition : ""
+                text: root.current ? Model.conditionLabel(root.current.condition) : ""
                 color: Qt.darker(root.barForeground, 1.5)
                 font.family: root.bar ? root.bar.fontFamily : Style.font.family
                 font.pixelSize: Style.font.bodySmall

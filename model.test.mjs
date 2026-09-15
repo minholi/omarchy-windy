@@ -359,6 +359,10 @@ assert.equal(model.conditionSeverity('thunder') > model.conditionSeverity('rain'
 assert.ok(model.conditionIcon('rain', false) !== '');
 assert.notEqual(model.conditionIcon('clear', false), model.conditionIcon('clear', true));
 assert.equal(model.conditionIcon('bogus', false), '');
+assert.equal(model.conditionLabel('clear'), 'Clear');
+assert.equal(model.conditionLabel('partly'), 'Partly cloudy');
+assert.equal(model.conditionLabel('thunder'), 'Thunderstorm');
+assert.equal(model.conditionLabel('bogus'), '');
 
 // ---- Response parsing ------------------------------------------------------
 const good = model.parseResponse('{"ts":[1],"units":{}}');
@@ -519,6 +523,7 @@ assert.match(panel, /password:\s*true/);
 assert.match(panel, /updateEntryInline/);
 assert.match(panel, /function\s+settings\s*\(\s*\)\s*:\s*void/);
 assert.match(panel, /Model\.conditionIcon\(/);
+assert.match(panel, /Model\.conditionLabel\(/);
 assert.match(panel, /Model\.formatTemperature\(/);
 assert.match(panel, /function\s+status\s*\(\s*\)\s*:\s*string/);
 assert.match(panel, /function\s+openWindy\s*\(/);
