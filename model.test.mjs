@@ -524,6 +524,8 @@ assert.match(panel, /updateEntryInline/);
 assert.match(panel, /function\s+settings\s*\(\s*\)\s*:\s*void/);
 assert.match(panel, /Model\.conditionIcon\(/);
 assert.match(panel, /Model\.conditionLabel\(/);
+assert.match(panel, /readonly property string apiWarning/);
+assert.match(panel, /warning:\s*root\.apiWarning/);
 assert.match(panel, /Model\.formatTemperature\(/);
 assert.match(panel, /function\s+status\s*\(\s*\)\s*:\s*string/);
 assert.match(panel, /function\s+openWindy\s*\(/);

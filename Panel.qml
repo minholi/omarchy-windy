@@ -413,6 +413,12 @@ Panel {
     ? Model.conditionIcon(current.condition, night) : ""
   readonly property string activeModel: Model.modelLabel(modelId)
 
+  // A Windy testing key answers with "The testing API version is for
+  // development purposes only. This data is randomly shuffled and slightly
+  // modified." — surface it so shuffled values are not read as a widget bug.
+  readonly property string apiWarning: forecast && typeof forecast.warning === "string"
+    ? forecast.warning.replace(/^\s+|\s+$/g, "") : ""
+
   readonly property string tooltipText: {
     if (!current) return apiKey ? "Windy — waiting for forecast" : "Windy — no API key set"
     var text = speedLabel + " " + Model.unitLabel(unit)
@@ -422,6 +428,7 @@ Panel {
       text += " · rain " + Model.formatPrecip(current.precipMm, precipUnit)
     text += " · " + directionLabel
     if (location && location.name) text += " · " + location.name
+    if (apiWarning !== "") text += " · testing key (shuffled data)"
     return text
   }
 
@@ -864,6 +871,7 @@ Panel {
         precipUnit: root.precipUnit,
         countryHint: root.countryHint,
         tooltip: root.tooltipText,
+        warning: root.apiWarning,
         current: root.current,
         hourly: root.hourly,
         daily: root.daily
@@ -1447,6 +1455,19 @@ Panel {
                 }
               }
             }
+          }
+
+          // A testing key gets shuffled data on every request; say so rather
+          // than letting the values look like a parsing bug.
+          Text {
+            visible: !root.settingsMode && root.apiWarning !== ""
+            width: parent.width
+            wrapMode: Text.WordWrap
+            textFormat: Text.PlainText
+            text: "Windy testing key — the API returns randomly shuffled data. A Professional key is required for real forecasts."
+            color: root.bar ? root.bar.urgent : Color.urgent
+            font.family: root.bar ? root.bar.fontFamily : Style.font.family
+            font.pixelSize: Style.font.caption
           }
 
           Text {

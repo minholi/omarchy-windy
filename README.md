@@ -15,7 +15,7 @@ A wind, rain, and temperature bar widget for [Omarchy](https://omarchy.org) Quat
 ## Requirements
 
 - Omarchy with the Omarchy shell (Quattro).
-- A free Windy **Point Forecast** API key: <https://account.windy.com/keys>.
+- A Windy **Point Forecast** API key: <https://account.windy.com/keys>. Testing keys are free but Windy returns randomly shuffled, slightly modified data on every request; a Professional plan key is required for real forecasts.
 - `curl` at `/usr/bin/curl` and `secret-tool` at `/usr/bin/secret-tool` (both preinstalled on Omarchy).
 - A running Secret Service provider; Omarchy's default `gnome-keyring` passwordless keyring qualifies.
 
@@ -124,7 +124,7 @@ QML changes require `omarchy restart shell`; the plugin hot-reload does not rebu
 
 ## Data and attribution
 
-Weather data comes from the Windy Point Forecast API and is subject to [Windy's terms](https://api.windy.com/point-forecast/pricing). Geocoding is provided by Open-Meteo; IP auto-detection by ipwho.is. This plugin is unofficial and not affiliated with Windyty, S.E.
+Weather data comes from the Windy Point Forecast API and is subject to [Windy's terms](https://api.windy.com/point-forecast/pricing). Testing keys get randomly shuffled, slightly modified data on every request; the panel shows a warning whenever the API marks a response that way. Real forecasts require a Professional key. Geocoding is provided by Open-Meteo; IP auto-detection by ipwho.is. This plugin is unofficial and not affiliated with Windyty, S.E.
 
 ## License
 
