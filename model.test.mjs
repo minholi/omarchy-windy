@@ -407,6 +407,43 @@ const latest = model.currentForecast(data, 'surface', now + 10 * hour);
 approx(latest.speedMs, 0, 'falls back to last available point');
 assert.equal(model.currentForecast(data, '850h', now), null);
 
+// ---- Interpolated current conditions ---------------------------------------
+const blend = {
+  ts: [now, now + 2 * hour],
+  units: {
+    'wind_u-surface': 'm*s-1', 'wind_v-surface': 'm*s-1', 'gust-surface': 'm*s-1',
+    'temp-surface': 'K', 'past3hprecip-surface': 'm', 'pressure-surface': 'Pa', 'rh-surface': '%'
+  },
+  'wind_u-surface': [0, 4],
+  'wind_v-surface': [-2, 2],
+  'gust-surface': [2, 6],
+  'temp-surface': [283.15, 293.15],
+  'past3hprecip-surface': [0.001, 0.005],
+  'pressure-surface': [100000, 102000],
+  'rh-surface': [40, 80]
+};
+
+const midpoint = model.forecastAt(blend, 'surface', now + hour);
+assert.equal(midpoint.ms, now + hour);
+approx(midpoint.speedMs, 2, 'u/v blend at the midpoint');
+approx(Math.round(midpoint.from), 270, 'blended wind direction');
+approx(midpoint.gustMs, 4, 'gust blend');
+approx(midpoint.tempC, 15, 'temperature blend');
+approx(midpoint.pressureHpa, 1010, 'pressure blend');
+approx(midpoint.rh, 60, 'humidity blend');
+approx(midpoint.precipMm, 5, 'rain snaps to the nearest step');
+
+approx(model.forecastAt(blend, 'surface', now - 5 * hour).tempC, 10, 'clamps to the first step');
+const clampedEnd = model.forecastAt(blend, 'surface', now + 5 * hour);
+approx(clampedEnd.tempC, 20, 'clamps to the last step');
+approx(clampedEnd.speedMs, Math.sqrt(20), 'last step speed');
+
+// A step without wind data never gets blended across: the nearest usable step
+// wins, exactly like the pre-interpolation selection.
+approx(model.forecastAt(data, 'surface', now + 30 * 60 * 1000).speedMs, 5, 'null step falls back to nearest');
+assert.equal(model.forecastAt(null, 'surface', now), null);
+assert.equal(model.forecastAt(blend, '850h', now + hour), null);
+
 // ---- Full forecast point and daily aggregation -----------------------------
 const dayBase = Date.UTC(2026, 0, 1, 0, 0, 0);
 const hourMs = 3600000;

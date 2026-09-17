@@ -647,7 +647,10 @@ function cloudCoverAt(data, index) {
   return cover
 }
 
-function forecastPoint(data, level, index) {
+// Normalized series values for one step, before wind is converted into speed
+// and direction. Null when either wind component is missing; individual fields
+// stay null when the model has no value for them.
+function rawPoint(data, level, index) {
   var uKey = seriesKey("wind_u", level)
   var vKey = seriesKey("wind_v", level)
   var u = normalizeSpeed(responseValue(data, uKey, index), responseUnits(data, uKey))
@@ -658,28 +661,41 @@ function forecastPoint(data, level, index) {
   var precipKey = "past3hprecip-surface"
   var pressureKey = "pressure-surface"
 
-  var wind = uvToSpeedDir(u, v)
-  var tempC = normalizeTemperature(responseValue(data, tempKey, index), responseUnits(data, tempKey))
-  var precipMm = normalizePrecip(responseValue(data, precipKey, index), responseUnits(data, precipKey))
-  var pressureHpa = normalizePressure(responseValue(data, pressureKey, index), responseUnits(data, pressureKey))
-  var rh = responseValue(data, "rh-surface", index)
-  var ptype = responseValue(data, "ptype-surface", index)
-  var warningCode = responseValue(data, "weatherwarnings-surface", index)
-  var cloudCover = cloudCoverAt(data, index)
-
   return {
     ms: Number(data.ts[index]),
+    u: u,
+    v: v,
+    gustMs: normalizeSpeed(responseValue(data, "gust-surface", index), responseUnits(data, "gust-surface")),
+    tempC: normalizeTemperature(responseValue(data, tempKey, index), responseUnits(data, tempKey)),
+    precipMm: normalizePrecip(responseValue(data, precipKey, index), responseUnits(data, precipKey)),
+    pressureHpa: normalizePressure(responseValue(data, pressureKey, index), responseUnits(data, pressureKey)),
+    rh: responseValue(data, "rh-surface", index),
+    ptype: responseValue(data, "ptype-surface", index),
+    warningCode: responseValue(data, "weatherwarnings-surface", index),
+    cloudCover: cloudCoverAt(data, index)
+  }
+}
+
+function pointFromRaw(raw) {
+  var wind = uvToSpeedDir(raw.u, raw.v)
+  return {
+    ms: raw.ms,
     speedMs: wind.speed,
     from: wind.from,
     toward: wind.toward,
-    gustMs: normalizeSpeed(responseValue(data, "gust-surface", index), responseUnits(data, "gust-surface")),
-    tempC: tempC,
-    rh: rh,
-    precipMm: precipMm,
-    pressureHpa: pressureHpa,
-    cloudCover: cloudCover,
-    condition: deriveCondition(tempC, precipMm, ptype, cloudCover, rh, warningCode)
+    gustMs: raw.gustMs,
+    tempC: raw.tempC,
+    rh: raw.rh,
+    precipMm: raw.precipMm,
+    pressureHpa: raw.pressureHpa,
+    cloudCover: raw.cloudCover,
+    condition: deriveCondition(raw.tempC, raw.precipMm, raw.ptype, raw.cloudCover, raw.rh, raw.warningCode)
   }
+}
+
+function forecastPoint(data, level, index) {
+  var raw = rawPoint(data, level, index)
+  return raw ? pointFromRaw(raw) : null
 }
 
 function hourlyForecast(data, level, nowMs, maxHours, maxPoints) {
@@ -701,24 +717,102 @@ function hourlyForecast(data, level, nowMs, maxHours, maxPoints) {
   return out
 }
 
-function currentForecast(data, level, nowMs) {
-  if (!data || !Array.isArray(data.ts)) return null
+// Linear blend of one numeric field; a missing side falls back to the other.
+function blendValue(a, b, t) {
+  if (a === null || a === undefined) return b === undefined ? null : b
+  if (b === null || b === undefined) return a
+  return a + (b - a) * t
+}
 
-  var now = isFinite(Number(nowMs)) ? Number(nowMs) : Date.now()
+// Precipitation, precipitation type, and weather warnings describe the
+// nearest step rather than a mix of two, so they snap to one side.
+function blendRaw(lower, upper, t) {
+  var nearest = t < 0.5 ? lower : upper
+  return {
+    ms: lower.ms + (upper.ms - lower.ms) * t,
+    u: blendValue(lower.u, upper.u, t),
+    v: blendValue(lower.v, upper.v, t),
+    gustMs: blendValue(lower.gustMs, upper.gustMs, t),
+    tempC: blendValue(lower.tempC, upper.tempC, t),
+    precipMm: nearest.precipMm,
+    pressureHpa: blendValue(lower.pressureHpa, upper.pressureHpa, t),
+    rh: blendValue(lower.rh, upper.rh, t),
+    ptype: nearest.ptype,
+    warningCode: nearest.warningCode,
+    cloudCover: blendValue(lower.cloudCover, upper.cloudCover, t)
+  }
+}
+
+// Nearest step with usable wind data; ties keep the earlier step, exactly like
+// the pre-interpolation selection.
+function nearestRaw(data, level, ms) {
   var best = null
   var bestDistance = Infinity
   for (var i = 0; i < data.ts.length; i++) {
-    var ms = Number(data.ts[i])
-    if (!isFinite(ms)) continue
-    var distance = Math.abs(ms - now)
+    var stepMs = Number(data.ts[i])
+    if (!isFinite(stepMs)) continue
+    var distance = Math.abs(stepMs - ms)
     if (distance >= bestDistance) continue
-
-    var point = forecastPoint(data, level, i)
-    if (!point) continue
-    best = point
+    var raw = rawPoint(data, level, i)
+    if (!raw) continue
+    best = raw
     bestDistance = distance
   }
   return best
+}
+
+function rawOrNearest(data, level, index, ms) {
+  var raw = rawPoint(data, level, index)
+  if (raw) return raw
+  return nearestRaw(data, level, ms)
+}
+
+// Forecast for an arbitrary time between steps. Wind and scalar fields blend
+// across the bracketing steps so the bar does not jump to the next 3 h grid
+// point; before the first step and after the last one the nearest step wins.
+// When either bracketing step lacks wind data the old nearest-point selection
+// is used instead, so a null step never blends across the gap.
+function forecastAt(data, level, nowMs) {
+  if (!data || !Array.isArray(data.ts) || data.ts.length === 0) return null
+
+  var ms = isFinite(Number(nowMs)) ? Number(nowMs) : Date.now()
+
+  var lowerIndex = -1
+  var upperIndex = -1
+  for (var i = 0; i < data.ts.length; i++) {
+    var stepMs = Number(data.ts[i])
+    if (!isFinite(stepMs)) continue
+    if (stepMs <= ms) {
+      lowerIndex = i
+      continue
+    }
+    upperIndex = i
+    break
+  }
+
+  if (lowerIndex === -1) {
+    var first = rawOrNearest(data, level, upperIndex, ms)
+    return first ? pointFromRaw(first) : null
+  }
+  if (upperIndex === -1) {
+    var last = rawOrNearest(data, level, lowerIndex, ms)
+    return last ? pointFromRaw(last) : null
+  }
+
+  var lower = rawPoint(data, level, lowerIndex)
+  var upper = rawPoint(data, level, upperIndex)
+  if (!lower || !upper) {
+    var nearest = nearestRaw(data, level, ms)
+    return nearest ? pointFromRaw(nearest) : null
+  }
+
+  var span = upper.ms - lower.ms
+  var t = span > 0 ? (ms - lower.ms) / span : 0
+  return pointFromRaw(blendRaw(lower, upper, t))
+}
+
+function currentForecast(data, level, nowMs) {
+  return forecastAt(data, level, nowMs)
 }
 
 // Aggregate hourly points into local calendar days starting today. tzOffset
@@ -856,6 +950,7 @@ if (typeof module !== "undefined") {
     parseResponse: parseResponse,
     responseValue: responseValue,
     forecastPoint: forecastPoint,
+    forecastAt: forecastAt,
     hourlyForecast: hourlyForecast,
     currentForecast: currentForecast,
     dailyForecast: dailyForecast
