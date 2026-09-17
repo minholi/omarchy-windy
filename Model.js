@@ -140,6 +140,18 @@ function resolveModel(setting, latitude, longitude) {
   return modelById(id) ? id : FALLBACK_MODEL
 }
 
+// Provider setting -> concrete provider. "auto" prefers Windy only when a key
+// is configured; Open-Meteo is the keyless default, so it also wins for blank
+// and unknown values.
+function resolveProvider(setting, hasKey) {
+  var id = String(setting === undefined || setting === null ? "" : setting)
+    .replace(/^\s+|\s+$/g, "")
+    .toLowerCase()
+  if (id === "windy") return "windy"
+  if (id === "auto") return hasKey ? "windy" : "openmeteo"
+  return "openmeteo"
+}
+
 // API units strings look like "m*s-1", "km*h-1", or "kn". The returned
 // factor converts a value in that unit into m/s.
 function normalizeSpeedUnit(raw) {
@@ -661,6 +673,13 @@ function rawPoint(data, level, index) {
   var precipKey = "past3hprecip-surface"
   var pressureKey = "pressure-surface"
 
+  // Providers that hand over a condition directly (Open-Meteo's WMO code)
+  // publish it in a string series; everything else derives it from the values.
+  var conditionSeries = data ? data["condition-surface"] : undefined
+  var condition = Array.isArray(conditionSeries) && index >= 0 && index < conditionSeries.length
+    && typeof conditionSeries[index] === "string" && conditionSeries[index] !== ""
+    ? conditionSeries[index] : null
+
   return {
     ms: Number(data.ts[index]),
     u: u,
@@ -672,7 +691,8 @@ function rawPoint(data, level, index) {
     rh: responseValue(data, "rh-surface", index),
     ptype: responseValue(data, "ptype-surface", index),
     warningCode: responseValue(data, "weatherwarnings-surface", index),
-    cloudCover: cloudCoverAt(data, index)
+    cloudCover: cloudCoverAt(data, index),
+    condition: condition
   }
 }
 
@@ -689,7 +709,7 @@ function pointFromRaw(raw) {
     precipMm: raw.precipMm,
     pressureHpa: raw.pressureHpa,
     cloudCover: raw.cloudCover,
-    condition: deriveCondition(raw.tempC, raw.precipMm, raw.ptype, raw.cloudCover, raw.rh, raw.warningCode)
+    condition: raw.condition || deriveCondition(raw.tempC, raw.precipMm, raw.ptype, raw.cloudCover, raw.rh, raw.warningCode)
   }
 }
 
@@ -724,10 +744,12 @@ function blendValue(a, b, t) {
   return a + (b - a) * t
 }
 
-// Precipitation, precipitation type, and weather warnings describe the
-// nearest step rather than a mix of two, so they snap to one side.
+// Precipitation, precipitation type, weather warnings, and provider-supplied
+// conditions describe the nearest step rather than a mix of two, so they snap
+// to one side.
 function blendRaw(lower, upper, t) {
   var nearest = t < 0.5 ? lower : upper
+  var other = nearest === lower ? upper : lower
   return {
     ms: lower.ms + (upper.ms - lower.ms) * t,
     u: blendValue(lower.u, upper.u, t),
@@ -739,7 +761,8 @@ function blendRaw(lower, upper, t) {
     rh: blendValue(lower.rh, upper.rh, t),
     ptype: nearest.ptype,
     warningCode: nearest.warningCode,
-    cloudCover: blendValue(lower.cloudCover, upper.cloudCover, t)
+    cloudCover: blendValue(lower.cloudCover, upper.cloudCover, t),
+    condition: nearest.condition || other.condition
   }
 }
 
@@ -900,6 +923,7 @@ if (typeof module !== "undefined") {
     unitLabel: unitLabel,
     autoModel: autoModel,
     resolveModel: resolveModel,
+    resolveProvider: resolveProvider,
     normalizeSpeedUnit: normalizeSpeedUnit,
     normalizeSpeed: normalizeSpeed,
     speedUnitFactor: speedUnitFactor,

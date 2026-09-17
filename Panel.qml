@@ -4,6 +4,7 @@ import Quickshell.Io
 import qs.Commons
 import qs.Ui
 import "Model.js" as Model
+import "OpenMeteo.js" as OpenMeteo
 
 Panel {
   id: root
@@ -39,6 +40,8 @@ Panel {
     if (keyringKey !== "") return keyringKey
     return String(Quickshell.env("WINDY_API_KEY") || "")
   }
+  readonly property string providerSetting: setting("provider", "openmeteo")
+  readonly property string provider: Model.resolveProvider(providerSetting, apiKey !== "")
   readonly property string unit: Model.resolveUnit(setting("unit", "kn"))
   readonly property string temperatureUnit: Model.resolveTemperatureUnit(setting("temperatureUnit", "auto"),
     Qt.locale().name, location && location.country ? location.country : root.countryHint)
@@ -386,8 +389,14 @@ Panel {
   property string requestBody: ""
   property bool forecastStarted: false
 
-  readonly property string modelId: Model.resolveModel(modelSetting,
-    location ? location.latitude : NaN, location ? location.longitude : NaN)
+  readonly property string providerName: provider === "windy" ? "Windy" : "Open-Meteo"
+  // Regional Open-Meteo models reject coordinates outside their domain; after
+  // the first such failure the request falls back to best_match until the
+  // model setting or the location changes.
+  property bool openMeteoFallback: false
+  readonly property string modelId: provider === "windy"
+    ? Model.resolveModel(modelSetting, location ? location.latitude : NaN, location ? location.longitude : NaN)
+    : (openMeteoFallback ? "best_match" : OpenMeteo.resolveModel(modelSetting))
   readonly property var current: forecast ? Model.currentForecast(forecast, level, Date.now()) : null
   readonly property var hourly: forecast ? Model.hourlyForecast(forecast, level, Date.now(), 24, 8) : []
   readonly property var daily: forecast
@@ -411,7 +420,10 @@ Panel {
     ? Model.formatTemperature(current.tempC, temperatureUnit, false) : ""
   readonly property string conditionGlyph: current
     ? Model.conditionIcon(current.condition, night) : ""
-  readonly property string activeModel: Model.modelLabel(modelId)
+  readonly property string activeModel: provider === "windy"
+    ? Model.modelLabel(modelId) : OpenMeteo.modelLabel(modelId)
+  // Windy reports the preceding 3 hours; Open-Meteo the preceding hour.
+  readonly property int precipWindowHours: forecast && forecast.precipWindowHours === 1 ? 1 : 3
 
   // A Windy testing key answers with "The testing API version is for
   // development purposes only. This data is randomly shuffled and slightly
@@ -420,7 +432,10 @@ Panel {
     ? forecast.warning.replace(/^\s+|\s+$/g, "") : ""
 
   readonly property string tooltipText: {
-    if (!current) return apiKey ? "Windy — waiting for forecast" : "Windy — no API key set"
+    if (!current) {
+      if (provider === "windy" && apiKey === "") return "Windy — no API key set"
+      return providerName + " — waiting for forecast"
+    }
     var text = speedLabel + " " + Model.unitLabel(unit)
     if (current.tempC !== null) text += " · " + Model.formatTemperature(current.tempC, temperatureUnit, true)
     if (current.gustMs !== null) text += " · gust " + Model.formatSpeed(current.gustMs, unit) + " " + Model.unitLabel(unit)
@@ -433,7 +448,7 @@ Panel {
   }
 
   readonly property string statusText: {
-    if (apiKey === "") return "Set your Windy API key from the gear in this panel"
+    if (provider === "windy" && apiKey === "") return "Set your Windy API key from the gear in this panel"
     if (locationError !== "") return locationError
     if (detectingLocation) return "Detecting location…"
     if (!location && locationFailed) return "Couldn't detect a location. Set one with: omarchy-weather-location --set City 48.2,16.4"
@@ -443,43 +458,60 @@ Panel {
     return ""
   }
 
+  // Builds the provider-specific request. Returns false when the settings do
+  // not describe a usable request; [errorText] then carries the reason.
+  function buildForecastRequest() {
+    if (!location) return false
+    if (provider === "windy") {
+      var model = Model.resolveModel(modelSetting, location.latitude, location.longitude)
+      var payload = Model.requestPayload({
+        latitude: location.latitude,
+        longitude: location.longitude,
+        model: model,
+        levels: Model.requestLevels(level),
+        parameters: Model.requestParameters(model),
+        key: apiKey
+      })
+      var problem = Model.requestError(payload)
+      if (problem) {
+        errorText = problem
+        return false
+      }
+      requestBody = Model.forecastRequestBody(payload)
+      forecastProc.command = Model.forecastRequestCommand()
+      return true
+    }
+
+    // Open-Meteo needs no key and carries no request body.
+    requestBody = ""
+    forecastProc.command = OpenMeteo.forecastCommand({
+      latitude: location.latitude,
+      longitude: location.longitude,
+      level: level,
+      model: openMeteoFallback ? "best_match" : OpenMeteo.resolveModel(modelSetting)
+    })
+    return true
+  }
+
   function refresh(force) {
-    if (apiKey === "") return
+    if (provider === "windy" && apiKey === "") return
     if (!location) {
       if (!detectingLocation && !locationFailed) requestIpLocation()
       return
     }
     if (!force && forecast && Date.now() - lastUpdatedMs < 120000) return
     if (forecastProc.running) return
-
-    var lat = location.latitude
-    var lon = location.longitude
-    var model = Model.resolveModel(modelSetting, lat, lon)
-    var payload = Model.requestPayload({
-      latitude: lat,
-      longitude: lon,
-      model: model,
-      levels: Model.requestLevels(level),
-      parameters: Model.requestParameters(model),
-      key: apiKey
-    })
-    var problem = Model.requestError(payload)
-    if (problem) {
-      errorText = problem
-      return
-    }
-
+    if (!buildForecastRequest()) return
     loading = true
     retries = 0
-    requestBody = Model.forecastRequestBody(payload)
-    startForecastRequest()
+    forecastProc.running = true
   }
 
-  // One request, one body: `onStarted` writes requestBody to curl's stdin and
-  // clears it, so a retry can start the same request again.
+  // A retry rebuilds the request, so the API key never has to be kept around
+  // in memory after the body was piped to curl's stdin.
   function startForecastRequest() {
-    if (requestBody === "" || forecastProc.running) return
-    forecastProc.command = Model.forecastRequestCommand()
+    if (forecastProc.running) return
+    if (!buildForecastRequest()) return
     forecastProc.running = true
   }
 
@@ -537,7 +569,9 @@ Panel {
     }
     onExited: function(exitCode) {
       root.loading = false
-      var parsed = Model.parseResponse(forecastStdout.raw)
+      var parsed = root.provider === "windy"
+        ? Model.parseResponse(forecastStdout.raw)
+        : OpenMeteo.parseResponse(forecastStdout.raw)
       if (parsed.ok) {
         root.forecast = parsed.data
         root.errorText = ""
@@ -546,7 +580,20 @@ Panel {
         return
       }
       var diagnostic = forecastStderr.raw.replace(/^\s+|\s+$/g, "")
-      root.errorText = parsed.error || diagnostic || "Windy request failed"
+      var failure = parsed.error || diagnostic
+        || (root.provider === "windy" ? "Windy request failed" : "Open-Meteo request failed")
+      // A mapped regional model can answer "No data is available for this
+      // location"; retry once with best_match instead of failing the widget.
+      if (root.provider === "openmeteo" && !root.openMeteoFallback
+          && OpenMeteo.resolveModel(root.modelSetting) !== "best_match"
+          && /no data/i.test(failure)) {
+        root.openMeteoFallback = true
+        root.errorText = ""
+        root.loading = true
+        Qt.callLater(root.startForecastRequest)
+        return
+      }
+      root.errorText = failure
       root.scheduleRetry()
     }
   }
@@ -565,9 +612,23 @@ Panel {
     errorText = ""
     locationError = ""
     lastUpdatedMs = 0
+    openMeteoFallback = false
     refresh(true)
   }
-  onApiKeyChanged: if (apiKey !== "") refresh(true)
+  onApiKeyChanged: if (provider === "windy" && apiKey !== "") refresh(true)
+  // Switching providers (including "auto" flipping on a key arrival) drops the
+  // other provider's data so no stale values leak into the panel.
+  onProviderChanged: {
+    forecast = null
+    errorText = ""
+    lastUpdatedMs = 0
+    openMeteoFallback = false
+    refresh(true)
+  }
+  onModelSettingChanged: {
+    openMeteoFallback = false
+    refresh(true)
+  }
 
   function openWindy() {
     if (!location) return
@@ -645,7 +706,10 @@ Panel {
     settingsMode = true
     if (editingLocation) cancelEditingLocation()
     apiKeySaved = false
-    Qt.callLater(function() { if (apiKeyField) apiKeyField.forceActiveFocus() })
+    Qt.callLater(function() {
+      if (apiKeyField && root.provider === "windy") apiKeyField.forceActiveFocus()
+      else settingsColumn.forceActiveFocus()
+    })
   }
 
   function closeSettings() {
@@ -866,6 +930,7 @@ Panel {
         loading: root.loading,
         updated: root.lastUpdatedMs,
         model: root.modelId,
+        provider: root.provider,
         unit: root.unit,
         temperatureUnit: root.temperatureUnit,
         precipUnit: root.precipUnit,
@@ -1140,8 +1205,9 @@ Panel {
             }
           }
 
-          // ---- Settings: API key and display units.
+          // ---- Settings: provider, API key and display units.
           Column {
+            id: settingsColumn
             visible: root.settingsMode
             width: parent.width
             spacing: Style.space(14)
@@ -1160,6 +1226,54 @@ Panel {
             Column {
               width: parent.width
               spacing: Style.space(6)
+
+              Text {
+                textFormat: Text.PlainText
+                text: "DATA PROVIDER"
+                color: Qt.darker(root.barForeground, 1.5)
+                font.family: root.bar ? root.bar.fontFamily : Style.font.family
+                font.pixelSize: Style.font.bodySmall
+                font.letterSpacing: 1
+              }
+
+              Row {
+                spacing: Style.space(8)
+
+                Repeater {
+                  model: [
+                    { id: "openmeteo", label: "Open-Meteo" },
+                    { id: "windy", label: "Windy" },
+                    { id: "auto", label: "Auto" }
+                  ]
+
+                  SettingChip {
+                    required property var modelData
+                    label: modelData.label
+                    selected: String(root.setting("provider", "openmeteo")) === modelData.id
+                    foreground: root.barForeground
+                    fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
+                    onPicked: root.saveSetting("provider", modelData.id)
+                  }
+                }
+              }
+
+              Text {
+                width: parent.width
+                wrapMode: Text.WordWrap
+                textFormat: Text.PlainText
+                text: root.provider === "windy"
+                  ? "Windy uses the API key from your login keyring. Testing keys return shuffled data; a Professional key is required for real forecasts."
+                  : "Open-Meteo needs no API key and is free for non-commercial use. Auto uses Windy only when a key is stored."
+                color: Qt.darker(root.barForeground, 1.5)
+                font.family: root.bar ? root.bar.fontFamily : Style.font.family
+                font.pixelSize: Style.font.caption
+              }
+            }
+
+            Column {
+              width: parent.width
+              spacing: Style.space(6)
+              visible: root.provider === "windy"
 
               Text {
                 textFormat: Text.PlainText
@@ -1421,7 +1535,7 @@ Panel {
                 spacing: Style.space(5)
                 Text {
                   textFormat: Text.PlainText
-                  text: "RAIN 3H"
+                  text: "RAIN " + root.precipWindowHours + "H"
                   color: Qt.darker(root.barForeground, 1.5)
                   font.family: root.bar ? root.bar.fontFamily : Style.font.family
                   font.pixelSize: Style.font.bodySmall
@@ -1650,7 +1764,7 @@ Panel {
               Text {
                 textFormat: Text.PlainText
                 anchors.verticalCenter: parent.verticalCenter
-                text: "Data: Windy · " + root.activeModel
+                text: "Data: " + (root.provider === "windy" ? "Windy" : "Open-Meteo (CC BY 4.0)") + " · " + root.activeModel
                   + (root.lastUpdatedMs > 0 ? " · " + Qt.formatDateTime(new Date(root.lastUpdatedMs), "HH:mm") : "")
                 color: Qt.darker(root.barForeground, 1.5)
                 font.family: root.bar ? root.bar.fontFamily : Style.font.family

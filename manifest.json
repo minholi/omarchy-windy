@@ -2,10 +2,10 @@
   "schemaVersion": 1,
   "id": "minholi.windy",
   "name": "Windy",
-  "version": "1.0.6",
+  "version": "1.1.0",
   "author": "Marcelo Minholi",
   "license": "MIT",
-  "description": "Condition, temperature, rain, and wind forecast in the bar, backed by the Windy Point Forecast API",
+  "description": "Condition, temperature, rain, and wind forecast in the bar, backed by Open-Meteo (default) or the Windy Point Forecast API",
   "kinds": [
     "bar-widget"
   ],
@@ -15,7 +15,7 @@
   },
   "barWidget": {
     "displayName": "Windy",
-    "description": "Wind speed, gusts, and direction from the Windy Point Forecast API, with an hourly outlook and a jump into windy.com.",
+    "description": "Wind speed, gusts, and direction with an hourly outlook and a jump into windy.com. Free by default through Open-Meteo; Windy is available with an API key.",
     "category": "Info",
     "aliases": [
       "wind",
@@ -25,6 +25,7 @@
     "allowMultiple": false,
     "defaultSection": "center",
     "defaults": {
+      "provider": "openmeteo",
       "model": "auto",
       "unit": "kn",
       "temperatureUnit": "auto",
@@ -33,6 +34,18 @@
       "refreshMinutes": 15
     },
     "schema": [
+      {
+        "key": "provider",
+        "type": "enum",
+        "label": "Data provider",
+        "description": "Open-Meteo needs no API key and returns real data, free for non-commercial use. Windy uses your API key (a Professional plan is required for real forecasts). Auto uses Windy only when a key is stored.",
+        "options": [
+          "openmeteo",
+          "windy",
+          "auto"
+        ],
+        "defaultValue": "openmeteo"
+      },
       {
         "key": "model",
         "type": "enum",

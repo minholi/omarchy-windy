@@ -444,6 +444,19 @@ approx(model.forecastAt(data, 'surface', now + 30 * 60 * 1000).speedMs, 5, 'null
 assert.equal(model.forecastAt(null, 'surface', now), null);
 assert.equal(model.forecastAt(blend, '850h', now + hour), null);
 
+// A provider-supplied condition series wins over deriving one from the values
+// and snaps to the nearer step.
+const stated = {
+  ts: [now, now + hour],
+  units: { 'wind_u-surface': 'm*s-1', 'wind_v-surface': 'm*s-1' },
+  'wind_u-surface': [0, 0],
+  'wind_v-surface': [-1, -1],
+  'condition-surface': ['rain', 'clear']
+};
+assert.equal(model.forecastPoint(stated, 'surface', 0).condition, 'rain');
+assert.equal(model.forecastAt(stated, 'surface', now + 0.4 * hour).condition, 'rain');
+assert.equal(model.forecastAt(stated, 'surface', now + 0.75 * hour).condition, 'clear');
+
 // ---- Full forecast point and daily aggregation -----------------------------
 const dayBase = Date.UTC(2026, 0, 1, 0, 0, 0);
 const hourMs = 3600000;
