@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "minholi.windy",
   "name": "Windy",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "author": "Marcelo Minholi",
   "license": "MIT",
   "description": "Condition, temperature, feels-like, rain, and wind forecast in the bar, backed by Open-Meteo (default) or the Windy Point Forecast API",
@@ -95,7 +95,7 @@
         "key": "temperatureMetric",
         "type": "enum",
         "label": "Temperature shown",
-        "description": "Which reading the panel header shows large: the air temperature or the apparent feels-like temperature. The FEELS stat and the tooltip show the feels-like value either way.",
+        "description": "Which reading the panel header shows large: the air temperature or the apparent feels-like temperature. In feels mode the air temperature is shown below the header value; the FEELS stat and the tooltip show the feels-like value either way.",
         "options": [
           "air",
           "feels"

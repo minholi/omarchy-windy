@@ -425,6 +425,9 @@ Panel {
     ? Model.formatTemperature(current.feelsC, temperatureUnit, true) : ""
   readonly property string heroTemperatureText: temperatureMetric === "feels" && feelsLikeText !== ""
     ? feelsLikeText : temperatureText
+  readonly property string heroCaptionText: temperatureMetric === "feels" && feelsLikeText !== ""
+    && current && current.tempC !== null
+    ? "AIR " + Model.formatTemperature(current.tempC, temperatureUnit, true) : ""
   readonly property string conditionGlyph: current
     ? Model.conditionIcon(current.condition, night) : ""
   readonly property string activeModel: provider === "windy"
@@ -1040,9 +1043,9 @@ Panel {
 
                 Text {
                   anchors.horizontalCenter: parent.horizontalCenter
-                  visible: root.temperatureMetric === "feels" && root.feelsLikeText !== ""
+                  visible: root.heroCaptionText !== ""
                   textFormat: Text.PlainText
-                  text: "FEELS LIKE"
+                  text: root.heroCaptionText
                   color: Qt.darker(root.barForeground, 1.4)
                   font.family: root.bar ? root.bar.fontFamily : Style.font.family
                   font.pixelSize: Style.font.bodySmall
