@@ -38,6 +38,8 @@ for (const row of manifest.barWidget.schema) {
 // The API key is a keyring credential; it is not a shell.json setting.
 assert.ok(!Object.prototype.hasOwnProperty.call(manifest.barWidget.defaults, 'apiKey'));
 assert.equal(schemaRow('apiKey'), undefined);
+assert.equal(schemaRow('temperatureMetric').defaultValue, 'air');
+assert.ok(schemaRow('temperatureMetric').options.includes('feels'));
 
 // Every enum the settings UI can write must be understood by the model.
 for (const option of schemaRow('model').options) {
@@ -444,6 +446,39 @@ approx(model.forecastAt(data, 'surface', now + 30 * 60 * 1000).speedMs, 5, 'null
 assert.equal(model.forecastAt(null, 'surface', now), null);
 assert.equal(model.forecastAt(blend, '850h', now + hour), null);
 
+// ---- Feels-like temperature ------------------------------------------------
+// Open-Meteo supplies an apparent temperature; Windy has no such parameter, so
+// the widget derives Steadman's shade value from temperature, humidity, and wind.
+approx(model.apparentTemperatureC(30, 60, 2), 32.9728579641, 'steadman apparent temperature');
+assert.equal(model.apparentTemperatureC(null, 60, 2), null);
+assert.equal(model.apparentTemperatureC(30, '', 2), null);
+assert.equal(model.apparentTemperatureC(30, 60, 'nope'), null);
+
+// Without a provider series the value is derived from the blended raw fields.
+approx(model.forecastAt(blend, 'surface', now + hour).feelsC,
+  model.apparentTemperatureC(15, 60, 2), 'derived feels-like blend');
+
+const suppliedFeels = {
+  ts: [now, now + hour, now + 2 * hour],
+  units: {
+    'wind_u-surface': 'm*s-1', 'wind_v-surface': 'm*s-1',
+    'temp-surface': 'C', 'feels-surface': 'C', 'rh-surface': '%'
+  },
+  'wind_u-surface': [0, 0, 0],
+  'wind_v-surface': [-1, -1, -1],
+  'temp-surface': [10, 20, 25],
+  'feels-surface': [8, 18, 30],
+  'rh-surface': [50, 50, 50]
+};
+assert.equal(model.forecastPoint(suppliedFeels, 'surface', 0).feelsC, 8);
+approx(model.forecastAt(suppliedFeels, 'surface', now + 0.5 * hour).feelsC, 13,
+  'provider feels-like blend');
+
+// A null provider value at one step falls back to the derived value there.
+const partialFeels = {...suppliedFeels, 'feels-surface': [null, 18, 30]};
+approx(model.forecastPoint(partialFeels, 'surface', 0).feelsC,
+  model.apparentTemperatureC(10, 50, 1), 'null feels-like falls back');
+
 // A provider-supplied condition series wins over deriving one from the values
 // and snaps to the nearer step.
 const stated = {
@@ -577,6 +612,10 @@ assert.match(panel, /Model\.conditionLabel\(/);
 assert.match(panel, /readonly property string apiWarning/);
 assert.match(panel, /warning:\s*root\.apiWarning/);
 assert.match(panel, /Model\.formatTemperature\(/);
+assert.match(panel, /setting\("temperatureMetric",\s*"air"\)/);
+assert.match(panel, /saveSetting\("temperatureMetric"/);
+assert.match(panel, /current\.feelsC/);
+assert.match(panel, /text:\s*"FEELS"/);
 assert.match(panel, /function\s+status\s*\(\s*\)\s*:\s*string/);
 assert.match(panel, /function\s+openWindy\s*\(/);
 assert.match(panel, /https:\/\/www\.windy\.com\/\?/);

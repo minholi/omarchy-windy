@@ -65,6 +65,7 @@ var INTERNAL_UNITS = {
   "wind_v-surface": "m*s-1",
   "gust-surface": "m*s-1",
   "temp-surface": "C",
+  "feels-surface": "C",
   "rh-surface": "%",
   "past3hprecip-surface": "mm",
   "pressure-surface": "hPa",
@@ -93,7 +94,7 @@ function hourlyVariables(level) {
   var selected = findLevel(level)
   var variables = [
     "wind_speed_10m", "wind_direction_10m", "wind_gusts_10m",
-    "temperature_2m", "relative_humidity_2m", "precipitation",
+    "temperature_2m", "apparent_temperature", "relative_humidity_2m", "precipitation",
     "surface_pressure", "cloud_cover_low", "cloud_cover_mid", "cloud_cover_high",
     "weather_code"
   ]
@@ -207,6 +208,7 @@ function shapeForecast(hourly) {
 
   var gust = []
   var temp = []
+  var feels = []
   var rh = []
   var precip = []
   var pressure = []
@@ -231,6 +233,7 @@ function shapeForecast(hourly) {
 
     gust.push(hourlyValue(hourly, "wind_gusts_10m", i))
     temp.push(hourlyValue(hourly, "temperature_2m", i))
+    feels.push(hourlyValue(hourly, "apparent_temperature", i))
     rh.push(hourlyValue(hourly, "relative_humidity_2m", i))
     precip.push(hourlyValue(hourly, "precipitation", i))
     pressure.push(hourlyValue(hourly, "surface_pressure", i))
@@ -243,6 +246,7 @@ function shapeForecast(hourly) {
 
   forecast.units["gust-surface"] = INTERNAL_UNITS["gust-surface"]
   forecast.units["temp-surface"] = INTERNAL_UNITS["temp-surface"]
+  forecast.units["feels-surface"] = INTERNAL_UNITS["feels-surface"]
   forecast.units["rh-surface"] = INTERNAL_UNITS["rh-surface"]
   forecast.units["past3hprecip-surface"] = INTERNAL_UNITS["past3hprecip-surface"]
   forecast.units["pressure-surface"] = INTERNAL_UNITS["pressure-surface"]
@@ -251,6 +255,7 @@ function shapeForecast(hourly) {
   forecast.units["hclouds-surface"] = INTERNAL_UNITS["hclouds-surface"]
   forecast["gust-surface"] = gust
   forecast["temp-surface"] = temp
+  forecast["feels-surface"] = feels
   forecast["rh-surface"] = rh
   forecast["past3hprecip-surface"] = precip
   forecast["pressure-surface"] = pressure

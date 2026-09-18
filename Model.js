@@ -274,6 +274,18 @@ function formatTemperature(celsius, unitId, withUnit) {
   return String(Math.round(value)) + "°" + (withUnit ? (unitId === "f" ? "F" : "C") : "")
 }
 
+function apparentTemperatureC(tempC, rh, windMs) {
+  if (tempC === undefined || tempC === null || tempC === "" ||
+      rh === undefined || rh === null || rh === "" ||
+      windMs === undefined || windMs === null || windMs === "") return null
+  var temp = Number(tempC)
+  var humidity = Number(rh)
+  var wind = Number(windMs)
+  if (!isFinite(temp) || !isFinite(humidity) || !isFinite(wind)) return null
+  var vapourPressure = humidity / 100 * 6.105 * Math.exp(17.27 * temp / (237.7 + temp))
+  return temp + 0.33 * vapourPressure - 0.7 * wind - 4
+}
+
 function precipUnitFor(temperatureUnit) {
   return temperatureUnit === "f" ? "in" : "mm"
 }
@@ -670,6 +682,7 @@ function rawPoint(data, level, index) {
   if (u === null || v === null) return null
 
   var tempKey = "temp-surface"
+  var feelsKey = "feels-surface"
   var precipKey = "past3hprecip-surface"
   var pressureKey = "pressure-surface"
 
@@ -686,6 +699,7 @@ function rawPoint(data, level, index) {
     v: v,
     gustMs: normalizeSpeed(responseValue(data, "gust-surface", index), responseUnits(data, "gust-surface")),
     tempC: normalizeTemperature(responseValue(data, tempKey, index), responseUnits(data, tempKey)),
+    feelsC: normalizeTemperature(responseValue(data, feelsKey, index), responseUnits(data, feelsKey)),
     precipMm: normalizePrecip(responseValue(data, precipKey, index), responseUnits(data, precipKey)),
     pressureHpa: normalizePressure(responseValue(data, pressureKey, index), responseUnits(data, pressureKey)),
     rh: responseValue(data, "rh-surface", index),
@@ -698,6 +712,8 @@ function rawPoint(data, level, index) {
 
 function pointFromRaw(raw) {
   var wind = uvToSpeedDir(raw.u, raw.v)
+  var feelsC = raw.feelsC === undefined || raw.feelsC === null
+    ? apparentTemperatureC(raw.tempC, raw.rh, wind.speed) : raw.feelsC
   return {
     ms: raw.ms,
     speedMs: wind.speed,
@@ -705,6 +721,7 @@ function pointFromRaw(raw) {
     toward: wind.toward,
     gustMs: raw.gustMs,
     tempC: raw.tempC,
+    feelsC: feelsC,
     rh: raw.rh,
     precipMm: raw.precipMm,
     pressureHpa: raw.pressureHpa,
@@ -756,6 +773,7 @@ function blendRaw(lower, upper, t) {
     v: blendValue(lower.v, upper.v, t),
     gustMs: blendValue(lower.gustMs, upper.gustMs, t),
     tempC: blendValue(lower.tempC, upper.tempC, t),
+    feelsC: blendValue(lower.feelsC, upper.feelsC, t),
     precipMm: nearest.precipMm,
     pressureHpa: blendValue(lower.pressureHpa, upper.pressureHpa, t),
     rh: blendValue(lower.rh, upper.rh, t),
@@ -937,6 +955,7 @@ if (typeof module !== "undefined") {
     resolveTemperatureUnit: resolveTemperatureUnit,
     temperatureValue: temperatureValue,
     formatTemperature: formatTemperature,
+    apparentTemperatureC: apparentTemperatureC,
     precipUnitFor: precipUnitFor,
     precipValue: precipValue,
     formatPrecip: formatPrecip,

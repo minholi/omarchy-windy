@@ -52,6 +52,7 @@ assert.equal(openmeteo.findLevel('surface'), 'surface');
 assert.equal(openmeteo.findLevel('850h'), '850h');
 assert.equal(openmeteo.findLevel('bogus'), 'surface');
 assert.ok(openmeteo.hourlyVariables('surface').includes('wind_speed_10m'));
+assert.ok(openmeteo.hourlyVariables('surface').includes('apparent_temperature'));
 assert.ok(!openmeteo.hourlyVariables('surface').includes('wind_speed_850hPa'));
 assert.ok(openmeteo.hourlyVariables('850h').includes('wind_speed_850hPa'));
 assert.ok(openmeteo.hourlyVariables('850h').includes('wind_direction_850hPa'));
@@ -70,6 +71,7 @@ assert.ok(url.includes('forecast_days=10'));
 assert.ok(url.includes('cell_selection=nearest'));
 assert.ok(url.includes('models=gfs_seamless'));
 assert.ok(url.includes('wind_speed_10m'));
+assert.ok(url.includes('apparent_temperature'));
 assert.ok(url.includes('wind_speed_850hPa'));
 
 const command = openmeteo.forecastCommand({ latitude: 1, longitude: 2, model: 'auto', level: 'surface' });
@@ -120,6 +122,7 @@ const hourly = {
   wind_direction_10m: [0, 90, 270],
   wind_gusts_10m: [8, 5, 9],
   temperature_2m: [20, 21, 22],
+  apparent_temperature: [19, 20.5, 24],
   relative_humidity_2m: [50, 60, 70],
   precipitation: [0.4, 0, 1.2],
   surface_pressure: [1010, 1011, 1012],
@@ -139,6 +142,8 @@ approx(shaped['wind_u-surface'][2], 6, 'west wind u');
 approx(shaped['past3hprecip-surface'][2], 1.2, 'hourly rain kept as-is');
 assert.equal(shaped['condition-surface'][1], 'drizzle');
 assert.equal(shaped.units['temp-surface'], 'C');
+assert.equal(shaped.units['feels-surface'], 'C');
+assert.equal(shaped['feels-surface'][1], 20.5);
 assert.equal(shaped.units['wind_u-850h'], 'm*s-1');
 
 const parsed = openmeteo.parseResponse(JSON.stringify({ hourly: hourly }));
@@ -148,6 +153,7 @@ assert.equal(parsed.ok, true);
 const now = Date.parse('2026-09-17T19:30Z');
 const current = model.forecastAt(parsed.data, 'surface', now);
 approx(current.tempC, 21.5, 'interpolated temperature');
+approx(current.feelsC, 22.25, 'interpolated feels-like');
 approx(current.speedMs, 2, 'interpolated speed');
 approx(current.from, 270, 'interpolated direction');
 approx(current.gustMs, 7, 'interpolated gust');

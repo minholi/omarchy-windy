@@ -46,6 +46,7 @@ Panel {
   readonly property string temperatureUnit: Model.resolveTemperatureUnit(setting("temperatureUnit", "auto"),
     Qt.locale().name, location && location.country ? location.country : root.countryHint)
   readonly property string temperatureUnitLabel: temperatureUnit === "f" ? "F" : "C"
+  readonly property string temperatureMetric: String(setting("temperatureMetric", "air")) === "feels" ? "feels" : "air"
   readonly property string precipUnit: Model.precipUnitFor(temperatureUnit)
   readonly property string level: Model.resolveLevel(setting("level", "surface"))
   readonly property string modelSetting: setting("model", "auto")
@@ -418,6 +419,12 @@ Panel {
     ? Math.round(current.rh) + "%" : ""
   readonly property string temperatureText: current
     ? Model.formatTemperature(current.tempC, temperatureUnit, false) : ""
+  readonly property string feelsLikeText: current && current.feelsC !== null
+    ? Model.formatTemperature(current.feelsC, temperatureUnit, false) : ""
+  readonly property string feelsLikeLabel: current && current.feelsC !== null
+    ? Model.formatTemperature(current.feelsC, temperatureUnit, true) : ""
+  readonly property string heroTemperatureText: temperatureMetric === "feels" && feelsLikeText !== ""
+    ? feelsLikeText : temperatureText
   readonly property string conditionGlyph: current
     ? Model.conditionIcon(current.condition, night) : ""
   readonly property string activeModel: provider === "windy"
@@ -438,6 +445,7 @@ Panel {
     }
     var text = speedLabel + " " + Model.unitLabel(unit)
     if (current.tempC !== null) text += " · " + Model.formatTemperature(current.tempC, temperatureUnit, true)
+    if (current.feelsC !== null) text += " · feels " + Model.formatTemperature(current.feelsC, temperatureUnit, true)
     if (current.gustMs !== null) text += " · gust " + Model.formatSpeed(current.gustMs, unit) + " " + Model.unitLabel(unit)
     if (current.precipMm !== null && current.precipMm >= 0.05)
       text += " · rain " + Model.formatPrecip(current.precipMm, precipUnit)
@@ -1003,27 +1011,42 @@ Panel {
                 font.pixelSize: 64
               }
 
-              Row {
+              Column {
                 anchors.verticalCenter: parent.verticalCenter
                 spacing: Style.space(2)
 
-                Text {
-                  id: tempBig
-                  textFormat: Text.PlainText
-                  text: root.temperatureText !== "" ? root.temperatureText : "—"
-                  color: root.barForeground
-                  font.family: root.bar ? root.bar.fontFamily : Style.font.family
-                  font.pixelSize: 56
-                  font.bold: true
+                Row {
+                  spacing: Style.space(2)
+
+                  Text {
+                    id: tempBig
+                    textFormat: Text.PlainText
+                    text: root.heroTemperatureText !== "" ? root.heroTemperatureText : "—"
+                    color: root.barForeground
+                    font.family: root.bar ? root.bar.fontFamily : Style.font.family
+                    font.pixelSize: 56
+                    font.bold: true
+                  }
+                  Text {
+                    textFormat: Text.PlainText
+                    text: root.current ? root.temperatureUnitLabel : ""
+                    color: root.barForeground
+                    font.family: root.bar ? root.bar.fontFamily : Style.font.family
+                    font.pixelSize: Style.font.display
+                    anchors.top: tempBig.top
+                    anchors.topMargin: Style.space(10)
+                  }
                 }
+
                 Text {
+                  anchors.horizontalCenter: parent.horizontalCenter
+                  visible: root.temperatureMetric === "feels" && root.feelsLikeText !== ""
                   textFormat: Text.PlainText
-                  text: root.current ? root.temperatureUnitLabel : ""
-                  color: root.barForeground
+                  text: "FEELS LIKE"
+                  color: Qt.darker(root.barForeground, 1.4)
                   font.family: root.bar ? root.bar.fontFamily : Style.font.family
-                  font.pixelSize: Style.font.display
-                  anchors.top: tempBig.top
-                  anchors.topMargin: Style.space(10)
+                  font.pixelSize: Style.font.bodySmall
+                  font.letterSpacing: 1
                 }
               }
             }
@@ -1420,6 +1443,39 @@ Panel {
 
               Text {
                 textFormat: Text.PlainText
+                text: "TEMPERATURE SHOWN"
+                color: Qt.darker(root.barForeground, 1.5)
+                font.family: root.bar ? root.bar.fontFamily : Style.font.family
+                font.pixelSize: Style.font.bodySmall
+                font.letterSpacing: 1
+              }
+
+              Row {
+                spacing: Style.space(8)
+
+                Repeater {
+                  model: [
+                    { id: "air", label: "Air" },
+                    { id: "feels", label: "Feels like" }
+                  ]
+
+                  SettingChip {
+                    required property var modelData
+                    label: modelData.label
+                    selected: root.temperatureMetric === modelData.id
+                    foreground: root.barForeground
+                    fontFamily: root.bar ? root.bar.fontFamily : Style.font.family
+                    onPicked: root.saveSetting("temperatureMetric", modelData.id)
+                  }
+                }
+              }
+            }
+
+            Column {
+              spacing: Style.space(6)
+
+              Text {
+                textFormat: Text.PlainText
                 text: "BAR DISPLAY"
                 color: Qt.darker(root.barForeground, 1.5)
                 font.family: root.bar ? root.bar.fontFamily : Style.font.family
@@ -1450,7 +1506,7 @@ Panel {
             }
           }
 
-          // ---- Stats: wind, direction, gust, rain, humidity.
+          // ---- Stats: wind, direction, gust, rain, humidity, feels-like.
           Item {
             visible: !root.settingsMode && !!root.current
             width: parent.width
@@ -1563,6 +1619,25 @@ Panel {
                 Text {
                   textFormat: Text.PlainText
                   text: root.humidityLabel !== "" ? root.humidityLabel : "—"
+                  color: root.barForeground
+                  font.family: root.bar ? root.bar.fontFamily : Style.font.family
+                  font.pixelSize: Style.font.title
+                }
+              }
+
+              Column {
+                spacing: Style.space(5)
+                Text {
+                  textFormat: Text.PlainText
+                  text: "FEELS"
+                  color: Qt.darker(root.barForeground, 1.5)
+                  font.family: root.bar ? root.bar.fontFamily : Style.font.family
+                  font.pixelSize: Style.font.bodySmall
+                  font.letterSpacing: 1
+                }
+                Text {
+                  textFormat: Text.PlainText
+                  text: root.feelsLikeLabel !== "" ? root.feelsLikeLabel : "—"
                   color: root.barForeground
                   font.family: root.bar ? root.bar.fontFamily : Style.font.family
                   font.pixelSize: Style.font.title
