@@ -425,9 +425,12 @@ Panel {
     ? Model.formatTemperature(current.feelsC, temperatureUnit, true) : ""
   readonly property string heroTemperatureText: temperatureMetric === "feels" && feelsLikeText !== ""
     ? feelsLikeText : temperatureText
-  readonly property string heroCaptionText: temperatureMetric === "feels" && feelsLikeText !== ""
-    && current && current.tempC !== null
-    ? "AIR " + Model.formatTemperature(current.tempC, temperatureUnit, true) : ""
+  readonly property bool heroShowsFeels: temperatureMetric === "feels" && feelsLikeText !== ""
+  readonly property string secondaryTemperatureLabel: heroShowsFeels ? "AIR" : "FEELS"
+  readonly property string secondaryTemperatureValue: heroShowsFeels
+    ? (current && current.tempC !== null
+      ? Model.formatTemperature(current.tempC, temperatureUnit, true) : "")
+    : feelsLikeLabel
   readonly property string conditionGlyph: current
     ? Model.conditionIcon(current.condition, night) : ""
   readonly property string activeModel: provider === "windy"
@@ -1014,42 +1017,27 @@ Panel {
                 font.pixelSize: 64
               }
 
-              Column {
+              Row {
                 anchors.verticalCenter: parent.verticalCenter
                 spacing: Style.space(2)
 
-                Row {
-                  spacing: Style.space(2)
-
-                  Text {
-                    id: tempBig
-                    textFormat: Text.PlainText
-                    text: root.heroTemperatureText !== "" ? root.heroTemperatureText : "—"
-                    color: root.barForeground
-                    font.family: root.bar ? root.bar.fontFamily : Style.font.family
-                    font.pixelSize: 56
-                    font.bold: true
-                  }
-                  Text {
-                    textFormat: Text.PlainText
-                    text: root.current ? root.temperatureUnitLabel : ""
-                    color: root.barForeground
-                    font.family: root.bar ? root.bar.fontFamily : Style.font.family
-                    font.pixelSize: Style.font.display
-                    anchors.top: tempBig.top
-                    anchors.topMargin: Style.space(10)
-                  }
-                }
-
                 Text {
-                  anchors.horizontalCenter: parent.horizontalCenter
-                  visible: root.heroCaptionText !== ""
+                  id: tempBig
                   textFormat: Text.PlainText
-                  text: root.heroCaptionText
-                  color: Qt.darker(root.barForeground, 1.4)
+                  text: root.heroTemperatureText !== "" ? root.heroTemperatureText : "—"
+                  color: root.barForeground
                   font.family: root.bar ? root.bar.fontFamily : Style.font.family
-                  font.pixelSize: Style.font.bodySmall
-                  font.letterSpacing: 1
+                  font.pixelSize: 56
+                  font.bold: true
+                }
+                Text {
+                  textFormat: Text.PlainText
+                  text: root.current ? root.temperatureUnitLabel : ""
+                  color: root.barForeground
+                  font.family: root.bar ? root.bar.fontFamily : Style.font.family
+                  font.pixelSize: Style.font.display
+                  anchors.top: tempBig.top
+                  anchors.topMargin: Style.space(10)
                 }
               }
             }
@@ -1632,7 +1620,7 @@ Panel {
                 spacing: Style.space(5)
                 Text {
                   textFormat: Text.PlainText
-                  text: "FEELS"
+                  text: root.secondaryTemperatureLabel
                   color: Qt.darker(root.barForeground, 1.5)
                   font.family: root.bar ? root.bar.fontFamily : Style.font.family
                   font.pixelSize: Style.font.bodySmall
@@ -1640,7 +1628,7 @@ Panel {
                 }
                 Text {
                   textFormat: Text.PlainText
-                  text: root.feelsLikeLabel !== "" ? root.feelsLikeLabel : "—"
+                  text: root.secondaryTemperatureValue !== "" ? root.secondaryTemperatureValue : "—"
                   color: root.barForeground
                   font.family: root.bar ? root.bar.fontFamily : Style.font.family
                   font.pixelSize: Style.font.title

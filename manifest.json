@@ -95,7 +95,7 @@
         "key": "temperatureMetric",
         "type": "enum",
         "label": "Temperature shown",
-        "description": "Which reading the panel header shows large: the air temperature or the apparent feels-like temperature. In feels mode the air temperature is shown below the header value; the FEELS stat and the tooltip show the feels-like value either way.",
+        "description": "Which reading the panel header shows large: the air temperature or the apparent feels-like temperature. In feels mode the FEELS stat switches to the air temperature, so both readings stay visible.",
         "options": [
           "air",
           "feels"

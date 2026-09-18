@@ -128,7 +128,7 @@ The API key is a credential and lives in the keyring — see [Credentials](#cred
 | `provider` | `openmeteo`, `windy`, `auto` | `openmeteo` | Forecast data source; see [Providers](#providers). |
 | `unit` | `kn`, `kmh`, `mph`, `ms` | `kn` | Wind speed unit. |
 | `temperatureUnit` | `auto`, `c`, `f` | `auto` | Auto resolves by the location's country, then the locale. Rain follows: mm with °C, inches with °F. |
-| `temperatureMetric` | `air`, `feels` | `air` | Which temperature the panel header shows large; `feels` uses the apparent feels-like value, with the air temperature below it. The FEELS stat and the tooltip show it either way. |
+| `temperatureMetric` | `air`, `feels` | `air` | Which temperature the panel header shows large; `feels` uses the apparent feels-like value and the FEELS stat switches to the air temperature, so both readings stay visible. The tooltip always shows both. |
 | `display` | `temp`, `wind`, `both` | `temp` | Bar pill: condition + temperature, rotating arrow + speed, or all four. |
 | `level` | `surface`, `850h`, `700h`, `500h`, `300h` | `surface` | Wind level; temperature and rain stay at the surface. |
 | `model` | `auto`, `gfs`, `icon`, `iconEu`, `iconD2`, `aromeFrance`, `hrrrConus`, `namConus`, `namAlaska`, `namHawaii`, `canHrdps` | `auto` | Auto picks the highest-resolution model covering your coordinates (Windy falls back to GFS, Open-Meteo resolves to `best_match`). See [Providers](#providers) for the mapping. |
