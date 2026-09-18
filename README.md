@@ -4,8 +4,6 @@ A wind, rain, and temperature bar widget for [Omarchy](https://omarchy.org) Quat
 
 ![Windy panel](preview.png)
 
-![Windy panel showing the feels-like temperature](screenshot-feels.png)
-
 ![Windy settings](screenshot-settings.png)
 
 ![Windy bar pill](screenshot-bar.png)
