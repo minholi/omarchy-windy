@@ -4,12 +4,18 @@ A wind, rain, and temperature bar widget for [Omarchy](https://omarchy.org) Quat
 
 ![Windy panel](preview.png)
 
+![Windy panel showing the feels-like temperature](screenshot-feels.png)
+
+![Windy settings](screenshot-settings.png)
+
 ![Windy bar pill](screenshot-bar.png)
 
+![Windy bar pill showing wind](screenshot-bar-wind.png)
+
 - **Bar pill**: condition icon + temperature by default; optionally the rotating wind arrow + speed, or both.
-- **Panel**: current conditions, an 8-point hourly outlook (condition, temperature, wind, rain), and a 4-day forecast.
+- **Panel**: current conditions, a feels-like temperature stat, an 8-point hourly outlook (condition, temperature, wind, rain), and a 4-day forecast.
 - **Location**: shares `weather.json` with Omarchy's stock weather widget. Click the location to search (Open-Meteo geocoding), or let it auto-detect by IP.
-- **Settings**: provider, wind unit, temperature unit, and bar display, from the gear in the panel or the CLI.
+- **Settings**: provider, wind unit, temperature unit, header temperature, and bar display, from the gear in the panel or the CLI.
 - **Credentials**: only the Windy provider needs an API key; it is stored in the login keyring (Secret Service), never in a config file.
 
 ## Requirements
@@ -52,6 +58,8 @@ Windy model ids map to Open-Meteo models, so the same `model` setting works with
 | `namConus`, `namAlaska`, `namHawaii` | `best_match` |
 
 Regional models reject coordinates outside their domain; the widget then retries once with `best_match`. The rain stat covers the preceding 3 hours with Windy and the preceding hour with Open-Meteo, so the label reads `RAIN 3H` or `RAIN 1H` accordingly.
+
+The feels-like reading is the provider's apparent temperature when it has one — Open-Meteo's includes solar radiation — and otherwise a shade apparent temperature derived from air temperature, relative humidity, and wind (Steadman's formula), which is what the Windy provider gets.
 
 ## Request handling
 
@@ -120,6 +128,7 @@ The API key is a credential and lives in the keyring — see [Credentials](#cred
 | `provider` | `openmeteo`, `windy`, `auto` | `openmeteo` | Forecast data source; see [Providers](#providers). |
 | `unit` | `kn`, `kmh`, `mph`, `ms` | `kn` | Wind speed unit. |
 | `temperatureUnit` | `auto`, `c`, `f` | `auto` | Auto resolves by the location's country, then the locale. Rain follows: mm with °C, inches with °F. |
+| `temperatureMetric` | `air`, `feels` | `air` | Which temperature the panel header shows large; `feels` uses the apparent feels-like value. The FEELS stat and the tooltip show it either way. |
 | `display` | `temp`, `wind`, `both` | `temp` | Bar pill: condition + temperature, rotating arrow + speed, or all four. |
 | `level` | `surface`, `850h`, `700h`, `500h`, `300h` | `surface` | Wind level; temperature and rain stay at the surface. |
 | `model` | `auto`, `gfs`, `icon`, `iconEu`, `iconD2`, `aromeFrance`, `hrrrConus`, `namConus`, `namAlaska`, `namHawaii`, `canHrdps` | `auto` | Auto picks the highest-resolution model covering your coordinates (Windy falls back to GFS, Open-Meteo resolves to `best_match`). See [Providers](#providers) for the mapping. |
